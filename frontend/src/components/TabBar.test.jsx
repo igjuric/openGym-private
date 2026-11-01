@@ -124,7 +124,7 @@ describe('the tab a screen without its own lights', () => {
   const lit = () => tabs().filter(b => b.classList.contains('on')).map(b => b.textContent)
   it.each([
     ['/history', 'Stats'], ['/structural-balance', 'Stats'], ['/progress-photos', 'Stats'], ['/measurements', 'Stats'],
-    ['/settings', 'Home'], ['/settings/units', 'Home'], ['/checkin', 'Home'], ['/muscles', 'Exercises'],
+    ['/settings', 'Home'], ['/settings/units', 'Home'], ['/muscles', 'Exercises'],
   ])('%s lights %s', (pathname, tab) => {
     where.loc = { pathname }
     act(() => { root.render(<TabBar onStart={() => {}} />) })

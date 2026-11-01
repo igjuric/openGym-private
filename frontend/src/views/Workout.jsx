@@ -697,7 +697,7 @@ function ExerciseBlock({ entryIdx, compact, dense, editing, onToggle, onToggleSi
         or by a deload or rehab routine, which owns that choice and offers no undo. On in every
         view, compact included: it changes what the next session is built from. */}
     {entry.noProg === true && <div className="noprog">
-      <Icon name="chartLineSlash" /><span>{t('Not counted for progression')}</span>
+      <Icon name="chartLineSlash" /><span>{entry.block === 'deload' ? t('Deload week, not counted for progression') : entry.block === 'strength' ? t('Strength week, not counted for progression') : t('Not counted for progression')}</span>
       {onNoProg && <button type="button" className="chip" onClick={() => onNoProg(false)}>{t('Undo')}</button>}
     </div>}
     {/* compact view keeps the plan line: it is what the rows are measured against */}
@@ -2171,7 +2171,7 @@ function ActiveWorkout() {
         on a 320 px phone. */}
     {weighable
       ? <div className="wprog-row"><div className="wprog"><i style={{ width: (total ? done / total * 100 : 0) + '%' }} /></div>
-        <span className="wvol" data-session-volume>{fmtVol(vol, S.unit)}</span></div>
+        <span className="wvol" data-session-volume title={t('Volume')}>{fmtVol(vol, S.unit)}</span></div>
       : <div className="wprog"><i style={{ width: (total ? done / total * 100 : 0) + '%' }} /></div>}
     {/* In the list the chips ride in the pinned header, so any exercise is one tap away from
         anywhere in a long stack. */}

@@ -150,7 +150,7 @@ The full-quality files only ever travel from the release machine to Apple, like 
      (`RestTimerService`). Play may ask for a short screen recording of a rest running.
    - **Exact alarms:** only the user-granted `SCHEDULE_EXACT_ALARM` (reminder to the minute),
      no `USE_EXACT_ALARM`.
-   - **Camera:** scanning the gym membership code and photos of your own exercises.
+   - **Camera:** photos and videos of your own exercises.
 
 **Data safety answers:** no data collected, no data shared. Data stays on the device; the
 optional sync goes to a server the user runs or picks themselves (not the developer's), and

@@ -1,7 +1,7 @@
 import { useDeferredValue, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
-import { EXDB, BODYPARTS, allExercises, equipmentOf, byCategory, searchExercises, similarExercises } from '../lib/exercises.js'
+import { EXDB, BODYPARTS, allExercises, equipmentOf, byCategory, searchExercises, similarExercises, familiarFirst } from '../lib/exercises.js'
 import { MUSCLE_NAME } from '../lib/muscles.js'
 import { activeProfile, exAvailable } from '../lib/equipment.js'
 import { bestWeightFor } from '../lib/history.js'
@@ -14,7 +14,7 @@ import ExerciseViewToggle from '../components/ExerciseViewToggle.jsx'
 import { Button } from '../components/ui.jsx'
 import { tappable, useRevealActiveChip } from '../lib/use-sheet-keyboard.js'
 import { useAutoMore } from '../lib/use-auto-more.js'
-import { isFav, sortFavouritesFirst, sortYoursFirst, usageOf } from '../lib/favourites.js'
+import { isFav, sortYoursFirst, usageOf } from '../lib/favourites.js'
 
 export default function Library() {
   const nav = useNavigate()
@@ -39,11 +39,12 @@ export default function Library() {
   const eqOpts = equipmentOf(eqFiltered)
   // Drop the equipment filter if the search narrowed it away, so you never hit a dead end.
   const eqOn = eqOpts.includes(eq) ? eq : ''
-  // Favourites float to the top of whatever the filters left (issue #6), the rest keeps its order;
-  // while searching, the exercises you have logged or planned follow right after them.
+  // Favourites float to the top of whatever the filters left (issue #6), then the exercises you
+  // have logged or planned. Without a search the rest opens on the familiar lifts (familiarFirst)
+  // instead of the alphabet's numbered drills; a search keeps its own ranking.
   const narrowedList = eqOn ? eqFiltered.filter(e => e.eq === eqOn) : eqFiltered
-  const usage = useMemo(() => (q.trim() ? usageOf(S) : null), [q, S.routines, S.workouts])
-  const f = usage ? sortYoursFirst(narrowedList, S, usage) : sortFavouritesFirst(narrowedList, S)
+  const usage = useMemo(() => usageOf(S), [S.routines, S.workouts])
+  const f = sortYoursFirst(q.trim() ? narrowedList : familiarFirst(narrowedList), S, usage)
   useRevealActiveChip(bpStrip, bp)
   useRevealActiveChip(eqStrip, eqOn)
   useRevealActiveChip(catStrip, catOn)

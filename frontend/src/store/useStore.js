@@ -139,7 +139,7 @@ export const DEF = {
   // server pull, backup import) still falls back to the `showRir` boolean this replaced and
   // keeps the column it had. See effortOf.
   // nudge/tone: the missed-workout nudge (lib/nudge.js), opt-in, rides on the reminder.
-  reminder: { on: false, time: '08:00', tz: null, nudge: false, tone: 'friendly' }, effort: null, autoBackup: false,
+  reminder: { on: false, time: '08:00', tz: null, nudge: false, tone: 'friendly', summary: false }, effort: null, autoBackup: false,
   // Equipment profiles (issue: filter Library/picker/routines by what you actually own —
   // e.g. "Home" vs "Gym" — building on the session-only equipment filter from issue #6).
   equipProfiles: [], activeEquipId: null, equipFilterOn: false,
@@ -154,6 +154,9 @@ export const DEF = {
   // every profile written before this setting existed keeps the week it has been looking at.
   // See lib/format.js: nothing reads this field directly, everything goes through the helpers.
   weekStart: 1,
+  // The training block, { kind, weeks, start, repeat } (lib/blocks.js), or null: the weekly plan
+  // repeats as it is. A block never edits the routines, only the targets of a session it builds.
+  block: null,
   // Decimals on displayed weights: 1 by default, 2 for anyone loading quarter plates or
   // microplates (issue #139). Display only — nothing is stored or rounded differently.
   wdec: 1,
@@ -190,22 +193,10 @@ export const DEF = {
   // A machine's own weight stack, keyed by exercise id: { unit, weights: [5, 11.3, 18.1, …], _ts }
   // (lib/dumbbells.js, issue #688). Absent or empty = the increment decides, as before.
   stackWeights: {},
-  // Gym check-in cards (see views/CheckIn.jsx). Each is a membership
-  // code shown as a QR/barcode at the gym's turnstile — added by typing it, importing a photo
-  // of the card, or scanning it. We only ever keep the code's VALUE, never a photo: the image
-  // is regenerated from `value` every time it's shown (lib/qr.js). `fmt` is the barcode symbology
-  // ('qrcode' | 'ean13' | 'code128' | … — lower-cased BarcodeFormat) so it renders as the same
-  // kind of code the gym issued. Just data, so it syncs and backs up like everything else.
-  //   [{ id, label, value, fmt }]
+  // Membership codes from the gym check-in screen, which this app no longer has. The field stays
+  // so a profile or backup that holds cards still syncs and merges them unchanged (lib/sync-merge.js
+  // and api/sync-stamps.js both know it). [{ id, label, value, fmt }]
   gymCards: [],
-  // The card the check-in screen last settled on, so it reopens where you left it (handy when
-  // you have more than one gym). Holds a gymCards id, or null before any card exists / is chosen;
-  // a stale id (card since removed) is simply ignored by the view.
-  lastGymCardId: null,
-  // Whether the check-in feature is on at all (Settings toggle). Off hides the Home
-  // card and the /checkin route; the saved gymCards stay so turning it back on restores them.
-  // Defaults on; an older profile without the key reads as on (`!== false`).
-  checkIn: true,
   // Whether the body-weight summary card is shown on Home. Off only hides that card: existing
   // entries, Stats, imports and the separate pre-workout weigh-in flow keep working.
   // Defaults on; an older profile without the key reads as on (`!== false`).

@@ -11,6 +11,8 @@ import { backoffStepOf, applyBackoff } from './backoff.js'
 import { dbLoadFor, historyAs, ownedWeightsFor, withMeaning } from './dumbbells.js'
 import { isAssisted } from './exercises.js'
 import { sessionHistory } from './backfill.js'
+import { blockWeekOf, applyBlockPhase } from './blocks.js'
+import { todayISO } from './format.js'
 
 /**
  * Where a planned session's reps come from (Settings → During a workout). 'plan', the default:
@@ -128,6 +130,8 @@ export const builtOutOfProgression = (entry, routine) => entry?.noProg === true 
 export function buildSessionEntry(st, id, cfg, routine, slot) {
   const full = { ...cfg, id }
   const past = sessionHistory(st)
+  // A slot built in a block week is rebuilt in that week's shape (lib/blocks.js).
+  if (routine && slot?.block && !builtOutOfProgression(slot, routine)) return blockEntry(st, { id, ...buildPlannedEntry(past, full, routine) }, slot.block)
   if (routine) return buildPlannedEntry(past, full, routine, { noProg: builtOutOfProgression(slot, routine) })
   // Freestyle stamps the meaning of a dumbbell weight and reads last time in it, the way
   // buildPlannedEntry does for a planned exercise (lib/dumbbells.js).
@@ -140,12 +144,22 @@ export function buildSessionEntry(st, id, cfg, routine, slot) {
 // into real work must exclude only its own exercises. The merge helper (lib/session-merge.js)
 // stamps `entry.rid`, so the single-routine and combined paths share this builder unchanged; it
 // only reads the routine's id, to start each exercise from that routine's own history (#216).
-export function buildSessionEntries(st, r) {
+export function buildSessionEntries(st, r, day = todayISO()) {
   // The prescription is applied as the session is built, so you walk up to the bar with the
   // right weight already on the screen instead of being told about it afterwards.
   const noProg = r?.excludeFromProgression === true
+  // A training block's strength or deload week reshapes the targets on top (lib/blocks.js). A
+  // routine kept out of progression already has its own numbers, so a block leaves it alone.
+  const phase = noProg ? null : blockWeekOf(st, day)?.phase
   return (r ? r.ex : []).map(cfg => {
     const built = buildPlannedEntry(st, cfg, r, { noProg })
-    return { id: cfg.id, sg: cfg.sg, ...built, ...(noProg ? { noProg: true } : {}) }
+    const entry = { id: cfg.id, sg: cfg.sg, ...built, ...(noProg ? { noProg: true } : {}) }
+    return phase && phase !== 'build' ? blockEntry(st, entry, phase) : entry
   })
+}
+
+// One entry in a block week, rounded to the exercise's own step and never under the empty bar.
+function blockEntry(st, entry, phase) {
+  const cfg = entry.target || {}
+  return applyBlockPhase(entry, phase, { step: weightIncrement(cfg, st.unit), floor: barFloor(st, entry.id) })
 }

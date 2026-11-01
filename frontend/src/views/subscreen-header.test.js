@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-const PAGES = ['Admin', 'History', 'CheckIn', 'Measurements', 'CoachSetup', 'Muscles', 'ProgressPhotos', 'StructuralBalance']
+const PAGES = ['Admin', 'History', 'Measurements', 'Milestones', 'CoachSetup', 'Muscles', 'ProgressPhotos', 'StructuralBalance']
 
 const titleAfterBack = name => {
   const src = readFileSync(fileURLToPath(new URL(`./${name}.jsx`, import.meta.url)), 'utf8')

@@ -23,6 +23,7 @@ import { MOBILE } from '../lib/mobile.js'
 import { coachAvailable } from '../lib/coach.js'
 import { queueOf, queueView } from '../lib/queue.js'
 import { deriveSessionName } from '../lib/session-merge.js'
+import { BlockRow } from '../components/BlockSheet.jsx'
 import { markUndone, undoMarks } from '../lib/sync-merge.js'
 import {
   scheduleModeOf, queueRecovery, rotationIds, saveRotation, startNewPass, startPass, stopPass,
@@ -305,6 +306,9 @@ function Schedule({ S, update, nav, mode }) {
           : <Segmented className="seg-inline" value={mode} onChange={setMode}
               options={[{ value: 'week', label: t('Fixed Week') }, { value: 'rotation', label: t('Rotation') }]} />}
       </Row>
+      {/* The training block shapes the same routines week by week (lib/blocks.js), so it sits
+          with the other choice about how you train. Only once there is a plan to shape. */}
+      {S.routines.length > 0 && <BlockRow S={S} />}
       {/* a cobweb in the card's empty top corner, in season (components/Seasonal.jsx) */}
       <SeasonDeco spot="plan-card" />
     </Section>

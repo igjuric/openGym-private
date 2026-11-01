@@ -45,7 +45,7 @@ const FROM_APP = {
   'Time': 'Time',
   'Skip set': 'Skip set',
   'Personal records': 'PRs',
-  'Quick check-in': 'Quick check-in',
+  'Quick weigh-in': 'Quick weigh-in',
   'Save & start workout': 'Save & start workout',
   'Start without weighing in': 'Start without weighing in',
   'Body weight': 'Body weight',

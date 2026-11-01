@@ -562,6 +562,17 @@ const CAT_PRIOR = { strength: 3, calisthenics: 3, olympic: 2, plyometrics: 1, is
 const EVERYDAY = { '0739': 6 }
 const priorOf = e => (CLASSIC.has(e.id) ? 3 : 0) + (EQ_PRIOR[e.eq] || 0) + (CAT_PRIOR[e.cat] || 0) + (EVERYDAY[e.id] || 0)
 
+// A list opened without a search (the Library, the picker, a muscle's list): by name alone it
+// starts on "1 2 Stick Drill" and "123 Back Drill", and the bench press is pages down. The same
+// prior the search breaks ties with puts the familiar lifts first; equal priors keep the list's
+// own order (by name), and your own exercises, which callers put in front, stay in front.
+export function familiarFirst(list) {
+  return list
+    .map((e, i) => ({ e, i, p: e.custom ? 1000 : priorOf(e) }))
+    .sort((a, b) => b.p - a.p || a.i - b.i)
+    .map(x => x.e)
+}
+
 // A name that is the query itself wins outright: as typed or in the singular 50, with the typos
 // the search allows for its length 40 ("sqat" is the exercise called "squat", not "dumbbell squat").
 function wholeNameScore(plain, typedForms) {

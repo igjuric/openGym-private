@@ -50,7 +50,7 @@ import { todayISO } from '../lib/format.js'
 
 const routines = [{ id: 'a', name: 'A', emoji: null, ex: [] }, { id: 'b', name: 'B', emoji: null, ex: [] }]
 const baseS = over => ({
-  unit: 'kg', lang: 'en', weekStart: 1, checkIn: true, theme: 'dark', accent: 'lime', restSec: 90,
+  unit: 'kg', lang: 'en', weekStart: 1, theme: 'dark', accent: 'lime', restSec: 90,
   workoutView: 'cards', wc: {}, reminder: { on: false, time: '08:00', tz: null }, effort: null,
   routines, week: {}, dayPlan: {}, workouts: [], bodyweight: [], exWeights: {}, customEx: [],
   equipProfiles: [], activeEquipId: null, gymCards: [], favEx: [], exNotes: {}, barWeights: {},

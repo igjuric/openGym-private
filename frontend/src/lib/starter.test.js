@@ -27,17 +27,44 @@ const APPROVED = {
     [3, '5×5 B', [['0085', 5, 5], ['0426', 5, 5], ['2330', 5, 5]]],
     [5, '5×5 C', [['0739', 5, 5], ['0047', 5, 5], ['1323', 5, 5]]],
   ],
+  'strength-4': [
+    [1, 'Squat Day', [['0043', 5, 5], ['0085', 3, 8], ['0739', 3, 10], ['0605', 3, 12]]],
+    [2, 'Bench Day', [['0025', 5, 5], ['0027', 4, 8], ['0314', 3, 10], ['0241', 3, 12]]],
+    [4, 'Deadlift Day', [['0032', 3, 5], ['0042', 3, 6], ['0586', 3, 10], ['2330', 3, 10]]],
+    [5, 'Press Day', [['1162', 5, 5], ['0652', 4, 6], ['0289', 3, 10], ['0031', 3, 10]]],
+  ],
+  'two-day': [
+    [1, 'Full Body 1', [['0043', 3, 8], ['0025', 3, 8], ['0027', 3, 10], ['0334', 2, 12], ['0294', 2, 12]]],
+    [4, 'Full Body 2', [['0085', 3, 8], ['0426', 3, 10], ['2330', 3, 10], ['0739', 2, 12], ['0241', 2, 12]]],
+  ],
 }
 
 const shape = r => r.ex.map(e => [e.id, e.sets, e.reps])
 
 describe('starter plan catalog', () => {
-  it('offers exactly the four plans, with the day count read off the schedule', () => {
-    expect(starterPlanOptions()).toEqual([
-      { id: 'ppl', days: 3 }, { id: 'upper-lower', days: 4 },
-      { id: 'full-body', days: 3 }, { id: '5x5', days: 3 },
+  it('offers exactly these programmes, with the day count read off the schedule', () => {
+    expect(starterPlanOptions().map(({ id, days, level, goal }) => [id, days, level, goal])).toEqual([
+      ['beginner-ab', 3, 'beginner', 'strength'], ['full-body', 3, 'beginner', 'general'],
+      ['two-day', 2, 'beginner', 'general'], ['dumbbell-home', 3, 'beginner', 'general'],
+      ['ppl', 3, 'beginner', 'muscle'], ['5x5', 3, 'beginner', 'strength'],
+      ['upper-lower', 4, 'intermediate', 'muscle'], ['ppl-6', 6, 'intermediate', 'muscle'],
+      ['strength-4', 4, 'intermediate', 'strength'],
     ])
     for (const { id, days } of starterPlanOptions()) expect(starterPlanDays(id)).toHaveLength(days)
+  })
+
+  it('suggests a training block with every programme, one the block rules know', () => {
+    for (const { id, block } of starterPlanOptions()) {
+      expect(['strength', 'deload'], id).toContain(block.kind)
+      expect(buildStarterPlan(id).block).toEqual(block)
+    }
+    expect(buildStarterPlan('strength-4').block).toEqual({ kind: 'strength', weeks: 8 })
+  })
+
+  it('every exercise in every programme is in the catalogue', () => {
+    for (const { id } of starterPlanOptions()) {
+      for (const r of buildStarterPlan(id).routines) for (const e of r.ex) expect(EXIDX[e.id], `${id}: ${e.id}`).toBeTruthy()
+    }
   })
 
   it('changes nothing for an unknown plan id', () => {

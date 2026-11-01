@@ -818,7 +818,7 @@ struct WeighInView: View {
         let p = WeighIn.parts(store.bodyWeight)
         ScrollView {
             VStack(spacing: 6) {
-                Text("Quick check-in").font(.system(.headline, design: .rounded))
+                Text("Quick weigh-in").font(.system(.headline, design: .rounded))
                 HStack(alignment: .firstTextBaseline, spacing: 0) {
                     digits(String(Int(p.whole)), .whole, whole, 20...(store.unit == "lb" ? 700 : 320))
                     Text(verbatim: ".").font(.system(size: size, weight: .semibold, design: .rounded)).foregroundStyle(.secondary)

@@ -1,7 +1,7 @@
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useStore } from './store/useStore.js'
 import { useUI } from './store/useUI.js'
-import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf, byCategory, smOf, searchExercises, similarExercises, exOr, isAssisted, betterWeight, beatsWeight, isCustomEx } from './lib/exercises.js'
+import { EXDB, EXIDX, BODYPARTS, isCardio, isBodyweightEq, allExercises, equipmentOf, byCategory, smOf, searchExercises, similarExercises, exOr, isAssisted, betterWeight, beatsWeight, isCustomEx, familiarFirst } from './lib/exercises.js'
 import { activeProfile, exAvailable, ALL_EQUIPMENT, newProfile, profileEquipment, ACC_V } from './lib/equipment.js'
 import { fmtDate, fmtDateRange, fmtNum, fmtPlate, exerciseNameText, fmtVol, fmtDur, durPart, todayISO, isoOf, uid, exCount, routineCount, setsWorkCount, DAYN, DAYS, weekOrder, weekStartOf, weekDayOffset, MONTHS_LONG, ACCENTS } from './lib/format.js'
 import { lastEntryFor, bestWeightFor, bestWeightForEntry, buildSets, effectiveRoutineIds, workoutDay, workoutVolume, sessionVolume, countsWarmups, setsDone, setsDoneActive, setUnitsTotal, lastBW, sessionSections, setLabel, defaultConfig, pickedExerciseConfig, cleanupSg, modeOf, effortOf, EFFORT, capEffort, stepEffort, isBw, isPerSide, sideReps, workSetsDone, applyIntensifierPlan, MAX_PLANNED_WARMUPS, NOTE_MAX } from './lib/history.js'
@@ -48,6 +48,10 @@ import { normalizeRepRange } from './lib/rep-range.js'
 import { isBackoff, backoffWeights } from './lib/backoff.js'
 import { isPyramid, normalizePyramid, normalizePyramidRest, normalizePyramidWeight, pyramidFromFlat, flatFromPyramid, pyramidLabel, PYRAMID_MAX, MAX_PYRAMID_SETS, PYRAMID_PRESETS } from './lib/pyramid.js'
 import { MOBILE, shareExport, shareExportBlob, printHtml } from './lib/mobile.js'
+import { shareImage } from './components/share-image.js'
+import { MilestoneRow } from './components/Milestones.jsx'
+import { milestonesOf } from './lib/milestones.js'
+import { newBlock } from './lib/blocks.js'
 import { speedUnitOf, toSpeed, fromSpeed } from './lib/speed.js'
 import { clampIncline, inclineFits, INCLINE_MAX, INCLINE_STEP } from './lib/incline.js'
 import { buildCompletedWorkout, sessionEnd } from './lib/finish-workout.js'
@@ -178,18 +182,29 @@ const PLAN_COPY = {
   ppl: () => ({ name: t('Push / Pull / Legs'), about: t('Push, pull and legs each get their own day.') }),
   'upper-lower': () => ({ name: t('Upper / Lower'), about: t('Upper body twice, lower body twice.') }),
   'full-body': () => ({ name: t('Full Body'), about: t('Three sessions, the whole body each time.') }),
-  '5x5': () => ({ name: t('5×5'), about: t('Five sets of five on the main barbell lifts.') })
+  '5x5': () => ({ name: t('5×5'), about: t('Five sets of five on the main barbell lifts.') }),
+  'beginner-ab': () => ({ name: t('Beginner A/B'), about: t('Squat every session, the other big lifts taking turns. Few exercises, steady progress.') }),
+  'two-day': () => ({ name: t('Two days a week'), about: t('Two full-body sessions that cover everything, for a busy week.') }),
+  'dumbbell-home': () => ({ name: t('Dumbbells at home'), about: t('A pair of dumbbells and the floor, nothing else.') }),
+  'ppl-6': () => ({ name: t('Push / Pull / Legs × 2'), about: t('Each muscle twice a week over six days. For when three days feel easy.') }),
+  'strength-4': () => ({ name: t('Strength, four days'), about: t('One heavy main lift a day: squat, bench, deadlift, overhead press.') })
 }
+const PLAN_LEVEL = { beginner: () => t('Beginner'), intermediate: () => t('Intermediate') }
+const PLAN_GOAL = { strength: () => t('Strength'), muscle: () => t('Muscle'), general: () => t('General fitness') }
+// The training block a programme suggests (lib/blocks.js), in a few words.
+const planBlockText = b => b.kind === 'strength' ? t('{0}-week strength block', b.weeks) : t('Deload every {0} weeks', b.weeks)
 
 // Adds the plan's routines (reusing one you already have under the same name) and puts them on
 // its weekdays. Existing routines are never touched
 // and only the weekdays the plan asks for are reassigned; an id with no plan behind it changes
 // nothing at all. planId is deliberately required — a default invites `onClick={loadStarterPlan}`,
 // which hands the click event in as the plan and silently loads nothing.
-export function loadStarterPlan(planId, profile) {
+// `withBlock` also starts the training block the programme suggests, this week.
+export function loadStarterPlan(planId, profile, { withBlock = false } = {}) {
   const plan = buildStarterPlan(planId, profile ? profileEquipment(profile) : undefined)
   if (!plan) return false
   update(st => {
+    if (withBlock && plan.block) st.block = newBlock(st, plan.block.kind, plan.block.weeks, true)
     // Loading the same plan again reuses the routines it added last time (same name, same
     // exercises) for the weekdays instead of a second Upper A, Lower A, ... under the same names.
     // A plan fitted to different equipment has other exercises, so it is added alongside.
@@ -217,22 +232,31 @@ function StarterPlanChooser({ close }) {
   // Fitting starts on for the profile you already filter by; '' leaves the plan as written.
   const [fitId, setFitId] = useState(() => activeProfile(useStore.getState().S)?.id || '')
   const fit = profiles.find(p => p.id === fitId) || null
+  // Each programme comes with a training block (lib/blocks.js); on unless a block is already
+  // running, which loading a plan should not quietly replace.
+  const [withBlock, setWithBlock] = useState(() => !useStore.getState().S.block)
   const choose = (id, name) => {
     const days = starterPlanDays(id)
     close()
     // A confirmation is only worth showing when one of those days is actually occupied — by a
     // routine that still exists, not by a stale id the Plan already shows as "Rest".
     const taken = day => [].concat(week[day] || []).some(id => routines.some(r => r.id === id))
-    if (!days.some(taken)) { loadStarterPlan(id, fit); return }
+    if (!days.some(taken)) { loadStarterPlan(id, fit, { withBlock }); return }
     confirmSheet({
       title: t('Load {0}?', name),
       message: t('The new plan goes on {0}. Your existing routines stay; only those days of the weekly plan change.', dayList(days)),
       confirmText: t('Load plan'),
-      onConfirm: () => loadStarterPlan(id, fit)
+      onConfirm: () => loadStarterPlan(id, fit, { withBlock })
     })
   }
+  const options = starterPlanOptions()
   return <>
-    <h3>{t('Choose starter plan')}</h3>
+    <h3>{t('Choose a programme')}</h3>
+    <div className="sect-b" style={{ marginBottom: 10 }}>
+      <Row icon="calendar" iconTint="var(--indigo)" title={t('Start its training block too')} subtitle={t('Heavier and easier weeks planned for you. You can change it in Plan.')}>
+        <Switch checked={withBlock} onChange={setWithBlock} aria-label={t('Start its training block too')} />
+      </Row>
+    </div>
     {profiles.length > 0
       ? <div className="chips" style={{ margin: '0 0 10px' }}>
           <div className="small dim" style={{ width: '100%' }}>{t('Fit to my equipment')}</div>
@@ -240,16 +264,21 @@ function StarterPlanChooser({ close }) {
           {profiles.map(p => <button key={p.id} className={'chip nocap' + (fit?.id === p.id ? ' on' : '')} onClick={() => setFitId(p.id)}>{p.name}</button>)}
         </div>
       : <div className="small dim" style={{ margin: '0 0 10px' }}>{t('Add an equipment profile in Settings to fit a plan to what you own.')}</div>}
-    <div className="list">
-      {starterPlanOptions().map(({ id, days }) => {
-        const { name, about } = PLAN_COPY[id]()
-        return <div key={id} className="item" {...tappable(() => choose(id, name))}>
-          <span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="clipboard" /></span>
-          <div className="grow"><div className="tt">{name}</div><div className="ss">{t('{0} days per week', days)} · {about}</div></div>
-          <Icon name="chevronRight" className="chev" />
-        </div>
-      })}
-    </div>
+    {Object.keys(PLAN_LEVEL).map(level => <div key={level}>
+      <h4 className="sec">{PLAN_LEVEL[level]()}</h4>
+      <div className="list">
+        {options.filter(o => o.level === level).map(({ id, days, goal, block }) => {
+          const { name, about } = PLAN_COPY[id]()
+          return <div key={id} className="item" {...tappable(() => choose(id, name))}>
+            <span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name={goal === 'strength' ? 'barbell' : goal === 'muscle' ? 'arm' : 'figureStrength'} /></span>
+            <div className="grow"><div className="tt">{name}</div>
+              <div className="ss">{t('{0} days per week', days)} · {PLAN_GOAL[goal]()} · {planBlockText(block)}</div>
+              <div className="ss">{about}</div></div>
+            <Icon name="chevronRight" className="chev" />
+          </div>
+        })}
+      </div>
+    </div>)}
   </>
 }
 
@@ -333,7 +362,7 @@ function BwSheet({ required, onDone, close }) {
         nav — so it's a true no-op: the screen underneath is exactly where you left it. */}
     {required
       ? <div className="row between" style={{ marginBottom: 14 }}>
-          <h3 style={{ marginBottom: 0 }}>{t('Quick check-in')}</h3>
+          <h3 style={{ marginBottom: 0 }}>{t('Quick weigh-in')}</h3>
           <button className="iconbtn" aria-label={t('Cancel')} onClick={() => close()}><Icon name="xmark" /></button>
         </div>
       : <h3>{t('Log body weight')}</h3>}
@@ -1505,9 +1534,11 @@ function ExercisePicker({ onPick, title, close, like, actionIcon, backups }) {
   // Favourites float to the top of whatever the filters left (issue #6), the rest keeps its order.
   // On the same-muscle list the equipment order wins: what is on the same kit comes first,
   // favourites leading within each half.
-  // While searching, what you have logged or planned follows right after them.
+  // While searching, what you have logged or planned follows right after them. Without a search
+  // the rest opens on the familiar lifts (lib/exercises.js familiarFirst), not on numbered drills;
+  // the Chosen and Favourites lists keep their own order.
   const narrowedList = eqOn ? eqFiltered.filter(e => e.eq === eqOn) : eqFiltered
-  const ranked = q.trim() ? sortYoursFirst(narrowedList, st, usage) : sortFavouritesFirst(narrowedList, st)
+  const ranked = q.trim() ? sortYoursFirst(narrowedList, st, usage) : sortFavouritesFirst(bp === '★' || bp === '☆' ? narrowedList : familiarFirst(narrowedList), st)
   const f = bp === SAME ? sameMuscleFirst(ranked, likeEx) : ranked
   const chosenCount = Object.keys(usage).length
   const favCount = (st.favEx || []).length
@@ -3004,18 +3035,6 @@ async function saveFitFile(blob, name) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); URL.revokeObjectURL(a.href)
   toast(t('Saved. Garmin Connect can take it from here.'))
 }
-// The phone app goes through the OS share sheet the way a backup does; a browser that can share
-// files (most phones) opens its own; anything else saves the picture as a download.
-async function shareImage(blob, name, title) {
-  if (MOBILE) { try { await shareExportBlob(blob, name) } catch (e) { /* share sheet dismissed */ } return }
-  const file = typeof File === 'function' ? new File([blob], name, { type: 'image/png' }) : null
-  if (file && navigator.canShare?.({ files: [file] })) {
-    try { await navigator.share({ files: [file], title }) } catch (e) { /* dismissed */ }
-    return
-  }
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); URL.revokeObjectURL(a.href)
-  toast(t('Image saved'))
-}
 // The sentence a workout's Delete adds when its photos and videos go with it — every file the
 // record lists, shown or not. Empty when it has none.
 function mediaGoesToo(rec) {
@@ -3253,7 +3272,7 @@ function beginBackfill({ iso, time, durationMin, routineIds, replaceId }) {
   const st = S()
   const start = backfillStart(iso, time)
   const past = historyAsOf(st, { d: iso, start, replaceId })
-  const { entries, routineIds: rids, routines } = buildCombinedEntries(past, routineIds || [])
+  const { entries, routineIds: rids, routines } = buildCombinedEntries(past, routineIds || [], iso)
   update(s => {
     s.active = {
       id: uid(), d: iso, start,
@@ -3280,7 +3299,7 @@ function AddRoutineToSession({ close }) {
   if (!active) return null
   const inSession = new Set([].concat(active.routineIds || []))
   const add = r => {
-    const entries = buildSessionEntries(sessionHistory(st), r).map(e => ({ ...e, rid: r.id }))
+    const entries = buildSessionEntries(sessionHistory(st), r, active.d).map(e => ({ ...e, rid: r.id }))
     update(s => {
       if (!s.active) return
       // A session kept out of progression as a whole (the header ⋮) keeps the routine's
@@ -3674,6 +3693,9 @@ function KeepInRoutine({ additions }) {
 
 function FinishSummary({ w, prs, e1prs = [], additions = [], close }) {
   const st = useStore(s => s.S)
+  // What this workout reached (lib/milestones.js), worked out once: the summary stays open while
+  // photos are added, and the workouts do not change under it.
+  const [reached] = useState(() => milestonesOf(st, w))
   return <div style={{ textAlign: 'center', padding: '8px 0' }}>
     {/* Sticky, so the summary can be left from the top however far it has been scrolled. */}
     <div className="fin-x"><button type="button" className="iconbtn" aria-label={t('Close')} onClick={() => closeThenNav(close, '/home')}><Icon name="xmark" /></button></div>
@@ -3688,6 +3710,10 @@ function FinishSummary({ w, prs, e1prs = [], additions = [], close }) {
     {(prs.length > 0 || e1prs.length > 0) && <div style={{ textAlign: 'start', marginBottom: 12 }}>
       {prs.map(id => <div key={id} className="small accent row" style={{ gap: 6, alignItems: 'flex-start' }}><Icon name="trophy" style={{ fontSize: 13, marginTop: 2, flex: 'none' }} /><span>{t('New PR:')} <span className={exerciseNameClass(EXIDX[id])}>{EXIDX[id] ? exerciseNameFor(EXIDX[id]) : id}</span></span></div>)}
       {e1prs.map(p => <div key={p.id} className="small accent row" style={{ gap: 6, alignItems: 'flex-start' }}><Icon name="chartLine" style={{ fontSize: 13, marginTop: 2, flex: 'none' }} /><span>{t('Best estimated 1RM:')} <span className={exerciseNameClass(EXIDX[p.id])}>{EXIDX[p.id] ? exerciseNameFor(EXIDX[p.id]) : p.id}</span> · {fmtNum(p.est)} {st.unit}</span></div>)}
+    </div>}
+    {reached.length > 0 && <div className="ms-new">
+      <h4 className="sec">{tn('New milestone', 'New milestones', reached.length)}</h4>
+      <div className="list">{reached.map(m => <MilestoneRow key={m.id} m={m} unit={st.unit === 'lb' ? 'lb' : 'kg'} />)}</div>
     </div>}
     <h4 className="sec" style={{ textAlign: 'start' }}>{t('What you just trained')}</h4>
     <BodyMap load={loadOfWorkouts([w])} body={st.body} />

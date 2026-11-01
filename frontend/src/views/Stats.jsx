@@ -6,13 +6,15 @@ import { EXIDX, matchExercise, betterWeight, isAssisted } from '../lib/exercises
 import { lastBW, streakWeeks, setLabel, modeOf, effortOf, entriesForExercise, metricEntriesForExercise, metricModeForEntry, bestWeightForEntry, completedRepsOf, workoutDay, workoutAt, lifetimeVolume } from '../lib/history.js'
 import { fmtNum, fmtDate, fmtVol, todayISO, isoOf, weekKey, weekStartOf, exerciseNameText } from '../lib/format.js'
 import { speedUnitOf, speedLabel, toSpeed } from '../lib/speed.js'
-import { t, exerciseNameFor, exerciseNameClass, getLang } from '../lib/i18n.js'
+import { t, tn, exerciseNameFor, exerciseNameClass, getLang } from '../lib/i18n.js'
 import { bwSheet, goalSheet, calendarSheet, dayOverrideSheet, workoutDetailSheet, exerciseHistorySheet, WorkoutRow, bwDeltaColor, weighInsSheet } from '../sheets.jsx'
 import LineChart from '../components/LineChart.jsx'
 import WeightRate from '../components/WeightRate.jsx'
 import Heatmap from '../components/Heatmap.jsx'
 import { SeasonDeco } from '../components/Seasonal.jsx'
 import Icon from '../components/Icon.jsx'
+import { milestoneText } from '../components/Milestones.jsx'
+import { closestMilestone } from '../lib/milestones.js'
 import { reportSheet } from '../components/ReportSheet.jsx'
 import BodyMap, { BodyMapLegend } from '../components/BodyMap.jsx'
 import { loadOfWeeklyPlan, loadOfWorkouts, muscleBalanceWindow, rankOf, MUSCLES, MUSCLE_NAME, musclesOf } from '../lib/muscles.js'
@@ -30,7 +32,7 @@ import {
   effortHistogram, isHardSet, HARD_RIR
 } from '../lib/effort.js'
 import { anchorsByWorkout, resolveSetRir } from '../lib/recovery.js'
-import { Button, Segmented, SelectRow } from '../components/ui.jsx'
+import { Button, Row, Segmented, SelectRow } from '../components/ui.jsx'
 import { tappable } from '../lib/use-sheet-keyboard.js'
 import { isWarmupRow } from '../lib/workout-model.js'
 
@@ -471,6 +473,38 @@ export function WeeklyPlanVolume({ S }) {
   </div>
 }
 
+// The milestone closest to done (lib/milestones.js), as "Next: Squat · 100 kg (12 kg to go)":
+// a reason to train, where the latest one reached only looked back.
+export function closestMilestoneText(S) {
+  const unit = S.unit === 'lb' ? 'lb' : 'kg'
+  const m = closestMilestone(S)
+  if (!m) return null
+  const left = m.value - m.have
+  const togo = m.kind === 'count' ? tn('{0} workout', '{0} workouts', left)
+    : m.kind === 'streak' ? tn('{0} week', '{0} weeks', left)
+    : fmtNum(Math.ceil(left)) + ' ' + unit
+  return t('Next: {0} ({1} to go)', milestoneText(m, unit), togo)
+}
+
+// The pages under Stats, as one list instead of a card each with its own Open button: the
+// Stats page was five phone screens long, most of it the way into somewhere else.
+function StatsLinks({ S, workouts, nav }) {
+  const next = useMemo(() => closestMilestoneText(S), [S.workouts, S.unit, S.weekStart])
+  return <div className="card stats-links">
+    <SeasonDeco spot="stats-peek" />
+    <Row icon="medal" iconTint="var(--yellow)" title={t('Milestones')} accessory="chevron" onClick={() => nav('/milestones')}
+      subtitle={next || t('Your first workout is your first milestone.')} />
+    {workouts.length > 0 && <Row icon="gauge" iconTint="var(--orange)" title={t('Structural balance')} accessory="chevron"
+      onClick={() => nav('/structural-balance')} subtitle={t('See which lift is holding back the rest.')} />}
+    {(workouts.length > 0 || dayPhotosOf(S).length > 0) && <Row icon="image" iconTint="var(--pink)" title={t('Progress photos')} accessory="chevron"
+      onClick={() => nav('/progress-photos')} subtitle={t('Every progress photo, lined up by date, for any day. Plus a before/after slider.')} />}
+    <Row icon="ruler" iconTint="var(--teal)" title={t('Body measurements')} accessory="chevron" onClick={() => nav('/measurements')}
+      subtitle={(S.measurements || []).length
+        ? t('Last check-in {0}', fmtDate(S.measurements[S.measurements.length - 1].d, true))
+        : t('Waist, arms, body fat and anything else you measure, each with its own curve.')} />
+  </div>
+}
+
 export default function Stats() {
   const nav = useNavigate()
   const S = useStore(s => s.S)
@@ -724,11 +758,12 @@ export default function Stats() {
     <div className="hdr"><SeasonDeco spot="stats-hdr" /><div><h1>{t('Stats')}</h1><div className="sub">{t('Progress & history')}</div></div>
       <div className="row" style={{ gap: 8 }}>
         <button className="iconbtn" onClick={reportSheet} aria-label={t('Performance report')} title={t('Performance report')}><Icon name="note" /></button>
-        <button className="iconbtn" onClick={() => nav('/history')} aria-label={t('History')}><Icon name="history" /></button>
+        <button className="iconbtn" onClick={() => nav('/history')} aria-label={t('History')} title={t('History')}><Icon name="history" /></button>
       </div></div>
 
     <div className="tiles">
-      <div className="tile"><div className="l"><Icon name="dumbbell" />{t('Workouts')}</div><div className="v">{workouts.length}</div></div>
+      {/* Every workout is one tap from its count: History otherwise hides behind the clock above. */}
+      <div className="tile tappable" {...tappable(() => nav('/history'))}><div className="l"><Icon name="dumbbell" />{t('Workouts')}<Icon name="chevronRight" style={{ marginInlineStart: 'auto', color: 'var(--label-3)' }} /></div><div className="v">{workouts.length}</div></div>
       <div className="tile"><div className="l"><Icon name="calendar" />{t('This month')}</div><div className="v">{monthW}</div></div>
       <div className="tile"><div className="l"><Icon name="flame" />{t('Week streak')}</div><div className="v">{streakWeeks(S)}</div></div>
       <div className="tile"><div className="l"><Icon name="scale" />{t('Weight 30d')}</div><div className="v" style={{ fontSize: 22, color: bwDelta30 === null ? 'inherit' : bwDeltaColor(bwDelta30, (lastBW(S) || {}).w || 0) }}>{bwDelta30 === null ? '–' : (bwDelta30 > 0 ? '+' : '') + fmtNum(bwDelta30) + ' ' + S.unit}</div></div>
@@ -748,26 +783,9 @@ export default function Stats() {
       />
     </div>
 
+    <StatsLinks S={S} workouts={workouts} nav={nav} />
     {(workouts.length > 0 || Object.keys(loadOfWeeklyPlan(S)).length > 0) && <MuscleBalance S={S} />}
     {S.routines.length > 0 && <WeeklyPlanVolume S={S} />}
-    {workouts.length > 0 && <div className="card row between" style={{ alignItems: 'center', gap: 12 }}>
-      <div style={{ minWidth: 0 }}><h2 style={{ margin: 0 }}>{t('Structural balance')}</h2>
-        <div className="muted small" style={{ marginTop: 4 }}>{t('See which lift is holding back the rest.')}</div></div>
-      <Button size="sm" variant="tinted" trailingIcon="chevronRight" style={{ flexShrink: 0 }} onClick={() => nav('/structural-balance')}>{t('Open')}</Button>
-    </div>}
-    {(workouts.length > 0 || dayPhotosOf(S).length > 0) && <div className="card row between" style={{ alignItems: 'center', gap: 12 }}>
-      <div style={{ minWidth: 0 }}><h2 style={{ margin: 0 }}>{t('Progress photos')}</h2>
-        <div className="muted small" style={{ marginTop: 4 }}>{t('Every progress photo, lined up by date, for any day. Plus a before/after slider.')}</div></div>
-      <Button size="sm" variant="tinted" trailingIcon="chevronRight" style={{ flexShrink: 0 }} onClick={() => nav('/progress-photos')}>{t('Open')}</Button>
-    </div>}
-    <div className="card row between" style={{ alignItems: 'center', gap: 12 }}>
-      <SeasonDeco spot="stats-peek" />
-      <div style={{ minWidth: 0 }}><h2 style={{ margin: 0 }}>{t('Body measurements')}</h2>
-        <div className="muted small" style={{ marginTop: 4 }}>{(S.measurements || []).length
-          ? t('Last check-in {0}', fmtDate(S.measurements[S.measurements.length - 1].d, true))
-          : t('Waist, arms, body fat and anything else you measure, each with its own curve.')}</div></div>
-      <Button size="sm" variant="tinted" trailingIcon="chevronRight" style={{ flexShrink: 0 }} onClick={() => nav('/measurements')}>{t('Open')}</Button>
-    </div>
     {(hasEffort(S) || hasEstimableEffort(S)) && <EffortCard S={S} />}
 
     <div className="cols">

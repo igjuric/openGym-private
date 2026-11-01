@@ -1,4 +1,5 @@
 import { NUDGE_COPY } from './nudge-copy.js';
+import { SUMMARY_COPY } from './summary-copy.js';
 import { lineIndex } from './nudge.js';
 
 const COPY = {
@@ -73,6 +74,30 @@ const nudgeCopyFor = lang => {
   }
   return NUDGE_COPY[lang] || NUDGE_COPY.en;
 };
+// The weekly summary (weekly-summary.js), in the words of frontend/src/lib/weekly-summary.js
+// summaryText: what the week had, the zeros left out, a short line for a week with no workouts.
+const summaryCopyFor = lang => {
+  if (lang === 'de-CH') return JSON.parse(JSON.stringify(SUMMARY_COPY.de).replace(/ß/g, 'ss'));
+  return SUMMARY_COPY[lang] || SUMMARY_COPY.en;
+};
+const plural = (lang, forms, n) => {
+  let cat = n === 1 ? 'one' : 'other';
+  try { cat = new Intl.PluralRules(lang).select(n); } catch { /* an unknown tag keeps one/other */ }
+  const form = forms[cat] || forms.other || forms.many || forms.one;
+  return form.replace('{0}', () => String(n));
+};
+export function summaryPush(lang, sum, unit) {
+  const copy = summaryCopyFor(lang);
+  if (!sum.workouts) return { title: copy.title, body: copy.none, tag: 'weekly-summary' };
+  let num = n => String(n);
+  try { const f = new Intl.NumberFormat(lang || 'en'); num = n => f.format(n); } catch { /* plain digits */ }
+  const parts = [plural(lang, copy.workouts, sum.workouts)];
+  if (sum.volume > 0) parts.push(copy.lifted.replace('{0}', () => num(sum.volume) + ' ' + (unit === 'lb' ? 'lb' : 'kg')));
+  if (sum.prs > 0) parts.push(plural(lang, copy.prs, sum.prs));
+  if (sum.block) parts.push(copy.week.replace('{0}', () => String(sum.block.week)).replace('{1}', () => String(sum.block.of)));
+  return { title: copy.title, body: parts.join(' · '), tag: 'weekly-summary' };
+}
+
 export function nudgePush(lang, tone, routine, iso) {
   const copy = nudgeCopyFor(lang)[NUDGE_COPY.en[tone] ? tone : 'friendly'];
   const line = copy.lines[lineIndex(iso, copy.lines.length)];

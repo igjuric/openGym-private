@@ -34,13 +34,47 @@ const FIVE_BY_FIVE = [
   ['5x5-c', '5×5 C', 'barbell', [['0739', 5, 5], ['0047', 5, 5], ['1323', 5, 5]]]
 ]
 
+// The main barbell lifts, the A/B way: squat every session, the rest taking turns.
+const BEGINNER_AB = [
+  ['ab-a', 'Beginner A', 'barbell', [['0043', 3, 5], ['0025', 3, 5], ['0027', 3, 8]]],
+  ['ab-b', 'Beginner B', 'barbell', [['0043', 3, 5], ['1162', 3, 5], ['0032', 2, 5], ['2330', 3, 8]]]
+]
+
+// Two sessions that cover everything, for a week with little time in it.
+const TWO_DAY = [
+  ['2d-a', 'Full Body 1', 'figureStrength', [['0043', 3, 8], ['0025', 3, 8], ['0027', 3, 10], ['0334', 2, 12], ['0294', 2, 12]]],
+  ['2d-b', 'Full Body 2', 'figureStrength', [['0085', 3, 8], ['0426', 3, 10], ['2330', 3, 10], ['0739', 2, 12], ['0241', 2, 12]]]
+]
+
+// A pair of dumbbells and the floor: nothing a home gym is unlikely to have.
+const DUMBBELL_HOME = [
+  ['db-a', 'Dumbbells A', 'dumbbell', [['1760', 3, 10], ['0289', 3, 10], ['0292', 3, 10], ['0334', 2, 12], ['0294', 2, 12]]],
+  ['db-b', 'Dumbbells B', 'dumbbell', [['1459', 3, 10], ['0405', 3, 10], ['0381', 3, 10], ['0662', 3, 12], ['0313', 2, 12], ['0351', 2, 12]]]
+]
+
+// One main lift a day, heavy, with the work that helps it.
+const STRENGTH_4 = [
+  ['st-sq', 'Squat Day', 'legs', [['0043', 5, 5], ['0085', 3, 8], ['0739', 3, 10], ['0605', 3, 12]]],
+  ['st-bp', 'Bench Day', 'barbell', [['0025', 5, 5], ['0027', 4, 8], ['0314', 3, 10], ['0241', 3, 12]]],
+  ['st-dl', 'Deadlift Day', 'barbell', [['0032', 3, 5], ['0042', 3, 6], ['0586', 3, 10], ['2330', 3, 10]]],
+  ['st-oh', 'Press Day', 'barbell', [['1162', 5, 5], ['0652', 4, 6], ['0289', 3, 10], ['0031', 3, 10]]]
+]
+
 // [weekday, routineKey] — weekday is a DAYN index, so 1 is Monday. Fixed weeks only: every
 // plan repeats the same seven days, which is all the weekly plan model can represent.
+// level and goal sort and label the chooser; block is the training block (lib/blocks.js) the
+// chooser offers to start with the plan.
+const DELOAD_6 = { kind: 'deload', weeks: 6 }
 const PLANS = {
-  ppl: { routines: PPL, schedule: [[1, 'push'], [3, 'pull'], [5, 'legs']] },
-  'upper-lower': { routines: UPPER_LOWER, schedule: [[1, 'upper-a'], [2, 'lower-a'], [4, 'upper-b'], [5, 'lower-b']] },
-  'full-body': { routines: FULL_BODY, schedule: [[1, 'fb-a'], [3, 'fb-b'], [5, 'fb-c']] },
-  '5x5': { routines: FIVE_BY_FIVE, schedule: [[1, '5x5-a'], [3, '5x5-b'], [5, '5x5-c']] }
+  'beginner-ab': { level: 'beginner', goal: 'strength', block: DELOAD_6, routines: BEGINNER_AB, schedule: [[1, 'ab-a'], [3, 'ab-b'], [5, 'ab-a']] },
+  'full-body': { level: 'beginner', goal: 'general', block: DELOAD_6, routines: FULL_BODY, schedule: [[1, 'fb-a'], [3, 'fb-b'], [5, 'fb-c']] },
+  'two-day': { level: 'beginner', goal: 'general', block: DELOAD_6, routines: TWO_DAY, schedule: [[1, '2d-a'], [4, '2d-b']] },
+  'dumbbell-home': { level: 'beginner', goal: 'general', block: DELOAD_6, routines: DUMBBELL_HOME, schedule: [[1, 'db-a'], [3, 'db-b'], [5, 'db-a']] },
+  ppl: { level: 'beginner', goal: 'muscle', block: DELOAD_6, routines: PPL, schedule: [[1, 'push'], [3, 'pull'], [5, 'legs']] },
+  '5x5': { level: 'beginner', goal: 'strength', block: DELOAD_6, routines: FIVE_BY_FIVE, schedule: [[1, '5x5-a'], [3, '5x5-b'], [5, '5x5-c']] },
+  'upper-lower': { level: 'intermediate', goal: 'muscle', block: DELOAD_6, routines: UPPER_LOWER, schedule: [[1, 'upper-a'], [2, 'lower-a'], [4, 'upper-b'], [5, 'lower-b']] },
+  'ppl-6': { level: 'intermediate', goal: 'muscle', block: { kind: 'deload', weeks: 5 }, routines: PPL, schedule: [[1, 'push'], [2, 'pull'], [3, 'legs'], [4, 'push'], [5, 'pull'], [6, 'legs']] },
+  'strength-4': { level: 'intermediate', goal: 'strength', block: { kind: 'strength', weeks: 8 }, routines: STRENGTH_4, schedule: [[1, 'st-sq'], [2, 'st-bp'], [4, 'st-dl'], [5, 'st-oh']] }
 }
 
 const build = routines =>
@@ -53,7 +87,7 @@ export const starterRoutines = () => build(PPL)
 // [{ id, days }] for the chooser. The day count is read off the schedule rather than stored
 // beside it, so the two can never disagree.
 export const starterPlanOptions = () =>
-  Object.entries(PLANS).map(([id, { schedule }]) => ({ id, days: schedule.length }))
+  Object.entries(PLANS).map(([id, { schedule, level, goal, block }]) => ({ id, days: schedule.length, level, goal, block: { ...block } }))
 
 // The weekdays a plan would claim, or null for an unknown id.
 export const starterPlanDays = id => PLANS[id]?.schedule.map(([day]) => day) ?? null
@@ -132,6 +166,7 @@ export const buildStarterPlan = (id, equipment) => {
   return {
     routines,
     schedule: plan.schedule.filter(([, key]) => byKey[key]).map(([day, key]) => ({ day, routineId: byKey[key] })),
+    block: { ...plan.block },
     ...(fit && { fit: { swapped: fit.swapped, dropped: fit.dropped } })
   }
 }

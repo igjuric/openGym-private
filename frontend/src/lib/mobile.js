@@ -10,9 +10,10 @@
 // Like the demo build, MOBILE is replaced at build time, so all of this folds away in
 // web bundles; the Capacitor plugins are only ever imported behind it.
 import { t, tn } from './i18n-core.js'
-import { isoOf, todayISO } from './format.js'
+import { isoOf, todayISO, fmtNum } from './format.js'
 import { effectiveRoutineIds } from './history.js'
 import { NUDGE_COPY, lineIndex, nudgeFor, nudgeMinute, toneOf } from './nudge.js'
+import { SUMMARY_MINUTE, isLastDayOfWeek, summaryText, weekSummary } from './weekly-summary.js'
 import { excusedOn } from './day-notes.js'
 import { stateJson } from './state-json.js'
 
@@ -195,6 +196,28 @@ export function buildReminderNotifications(S, now = new Date()) {
 // that date, so asking about tomorrow and the day after already applies the back-off of a break
 // that goes on — at most 3 of these are ever queued past the last workout. Logging a workout
 // resyncs (every persist does), which drops the day and resets the count.
+// The weekly summary (lib/weekly-summary.js): one notification, on the next last day of the week
+// at 19:00 that is still ahead. Its numbers are the week's as of this save; every save schedules
+// it again, so it says what was logged by the time it goes off.
+const SUMMARY_ID = 3000
+export function buildSummaryNotification(S, now = new Date()) {
+  const r = S?.reminder
+  if (!r?.on || !r.summary) return []
+  const day = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12)
+  for (let offset = 0; offset < 8; offset++) {
+    const d = new Date(day)
+    d.setDate(day.getDate() + offset)
+    const iso = isoOf(d)
+    if (!isLastDayOfWeek(S, iso)) continue
+    const when = new Date(d)
+    when.setHours(Math.floor(SUMMARY_MINUTE / 60), SUMMARY_MINUTE % 60, 0, 0)
+    if (when <= now) continue
+    const { title, body } = summaryText(weekSummary(S, iso), S.unit === 'lb' ? 'lb' : 'kg', { t, tn, num: fmtNum })
+    return [{ id: SUMMARY_ID, title, body, schedule: { at: when, allowWhileIdle: true } }]
+  }
+  return []
+}
+
 export const NUDGE_WINDOW_DAYS = 7
 const NUDGE_ID_BASE = 2000
 export function buildNudgeNotifications(S, now = new Date()) {
@@ -243,6 +266,7 @@ export async function syncReminder(S, interactive = false) {
       ...LEGACY_REMINDER_IDS,
       ...Array.from({ length: REMINDER_WINDOW_DAYS }, (_, d) => ({ id: REMINDER_ID_BASE + d })),
       ...Array.from({ length: NUDGE_WINDOW_DAYS }, (_, d) => ({ id: NUDGE_ID_BASE + d })),
+      { id: SUMMARY_ID },
     ] }).catch(() => {})
     const r = S.reminder
     // The background check (lib/nudge-check.js) follows what is scheduled: nothing, nothing to check.
@@ -251,7 +275,7 @@ export async function syncReminder(S, interactive = false) {
     let perm = await LocalNotifications.checkPermissions()
     if (perm.display !== 'granted' && interactive) perm = await LocalNotifications.requestPermissions()
     if (perm.display !== 'granted') { await check([]); return false }
-    const notifications = [...buildReminderNotifications(S), ...buildNudgeNotifications(S)]
+    const notifications = [...buildReminderNotifications(S), ...buildNudgeNotifications(S), ...buildSummaryNotification(S)]
     if (notifications.length) await LocalNotifications.schedule({ notifications })
     await check(notifications)
     return true

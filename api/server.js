@@ -18,7 +18,7 @@ import * as coachJobs from './coach/jobs.js';
 import { coachRoutes } from './coach/routes.js';
 import { startCadence } from './coach/cadence.js';
 import { startWarmup } from './coach/warmup.js';
-import { dayReminderPush, nudgePush, restTimerPush, testPush } from './push-messages.js';
+import { dayReminderPush, nudgePush, restTimerPush, summaryPush, testPush } from './push-messages.js';
 import { verifyError, isMisconfigured, originHint } from './verify-error.js';
 import {
   hashPassword, verifyPassword, needsRehash, passwordProblem, passwordLength, nameKey, BusyError,
@@ -37,6 +37,7 @@ import { effectiveRoutineId } from './queue.js';
 import { stampPut } from './sync-stamps.js';
 import { atomicWrite as durableWrite } from './durable.js';
 import { excusedOn, nudgeFor, nudgeWindowOpen, toneOf } from './nudge.js';
+import { isLastDayOfWeek, summaryWindowOpen, weekSummary } from './weekly-summary.js';
 
 const PORT = +(process.env.PORT || 3000);
 const DATA = process.env.DATA_DIR || '/data';
@@ -536,6 +537,17 @@ function nudgeTick(user, S, now) {
   saveDb();
   sendPush(user.id, nudgePush(S.lang, toneOf(S.reminder), routine, now.date));
 }
+// The weekly summary (weekly-summary.js): opt-in on top of the reminder like the nudge, owed from
+// 19:00 until 21:30 on the last day of the user's week, once (`user.lastSummary`, the date it went
+// out). Sent even while a workout is on screen: it is a report, not a nag.
+function summaryTick(user, S, now) {
+  if (!S.reminder.summary || user.lastSummary === now.date) return;
+  if (!summaryWindowOpen(now.hhmm) || !isLastDayOfWeek(S, now.date)) return;
+  console.log('weekly summary firing', user.id);
+  user.lastSummary = now.date;
+  saveDb();
+  sendPush(user.id, summaryPush(S.lang, weekSummary(S, now.date), S.unit));
+}
 // What the tick needs to know before it reads a whole state: the reminder settings and whether
 // the Coach was agreed to, kept per user against the state file's mtime and size. The state cache
 // above holds at most STATE_CACHE_MAX documents, and the tick walks every subscribed user in the
@@ -553,7 +565,8 @@ function stateSummary(uid) {
   const r = S?.reminder;
   const sum = {
     mtimeMs: st.mtimeMs, size: st.size,
-    rem: r && typeof r === 'object' ? { on: !!r.on, tz: r.tz, time: r.time, nudge: !!r.nudge } : { on: false },
+    rem: r && typeof r === 'object' ? { on: !!r.on, tz: r.tz, time: r.time, nudge: !!r.nudge, summary: !!r.summary } : { on: false },
+    ws: S?.weekStart === 0 ? 0 : 1,
     consent: !!S?.coach?.consent?.agreedAt,
     settled: '',   // a local date the reminder was found to owe nothing on, for this file
   };
@@ -575,10 +588,12 @@ setInterval(() => {
       const late = minutesLate(sum.rem.time, now);
       const reminderOpen = late >= 0 && late <= REMINDER_WINDOW_MIN && user.lastReminder !== now.date && sum.settled !== now.date;
       const nudgeOpen = sum.rem.nudge && user.lastNudge !== now.date && nudgeWindowOpen(sum.rem.time, now.hhmm);
-      if (!reminderOpen && !nudgeOpen) continue;
+      const summaryOpen = sum.rem.summary && user.lastSummary !== now.date && summaryWindowOpen(now.hhmm) && isLastDayOfWeek({ weekStart: sum.ws }, now.date);
+      if (!reminderOpen && !nudgeOpen && !summaryOpen) continue;
       const S = readStateCached(user.id);
       if (!S?.reminder?.on) continue;
       if (nudgeOpen) nudgeTick(user, S, now);
+      if (summaryOpen) summaryTick(user, S, now);
       if (!reminderOpen) continue;
       // Nothing below depends on anything but the file, so an answer of "nothing owed today"
       // holds until the file changes (which drops the summary) or the date does.

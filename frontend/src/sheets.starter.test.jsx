@@ -39,7 +39,7 @@ beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
   useUI.setState({ sheets: [], toastMsg: '' })
   useStore.setState(s => ({
-    S: { ...s.S, routines: [{ id: 'mine', name: 'My routine', emoji: 'star', ex: [] }], week: {}, active: null },
+    S: { ...s.S, routines: [{ id: 'mine', name: 'My routine', emoji: 'star', ex: [] }], week: {}, active: null, block: null },
   }))
   document.body.innerHTML = ''
 })
@@ -49,12 +49,26 @@ afterEach(() => {
 })
 
 describe('starter plan chooser', () => {
-  it('lists every plan with its day count', () => {
+  it('lists every programme by level, with its day count, goal and training block', () => {
     starterPlanSheet()
     const host = renderTop()
-    expect([...host.querySelectorAll('.item .tt')].map(el => el.textContent))
-      .toEqual(['Push / Pull / Legs', 'Upper / Lower', 'Full Body', '5×5'])
+    expect([...host.querySelectorAll('.sec')].map(el => el.textContent)).toEqual(['Beginner', 'Intermediate'])
+    expect([...host.querySelectorAll('.item .tt')].map(el => el.textContent)).toEqual([
+      'Beginner A/B', 'Full Body', 'Two days a week', 'Dumbbells at home', 'Push / Pull / Legs', '5×5',
+      'Upper / Lower', 'Push / Pull / Legs × 2', 'Strength, four days',
+    ])
     expect(rowFor(host, 'Upper / Lower').querySelector('.ss').textContent).toContain('4 days per week')
+    expect(rowFor(host, 'Strength, four days').querySelector('.ss').textContent).toBe('4 days per week · Strength · 8-week strength block')
+  })
+
+  it('offers the training block switch on, unless a block is already running', () => {
+    starterPlanSheet()
+    expect(renderTop().querySelector('[role="switch"]').getAttribute('aria-checked')).toBe('true')
+    useUI.setState({ sheets: [] })
+    document.body.innerHTML = ''
+    useStore.setState(s => ({ S: { ...s.S, block: { kind: 'deload', weeks: 6, start: '2026-11-02', repeat: true } } }))
+    starterPlanSheet()
+    expect(renderTop().querySelector('[role="switch"]').getAttribute('aria-checked')).toBe('false')
   })
 
   it('loads straight away when the plan’s weekdays are free, without asking', () => {
@@ -182,6 +196,14 @@ describe('loadStarterPlan', () => {
     const second = S().routines.slice(4).map(r => r.id)
     expect(S().routines).toHaveLength(7)
     expect(new Set([...first, ...second]).size).toBe(6)
+  })
+
+  it('starts the programme’s training block when asked, and leaves the block alone when not', () => {
+    loadStarterPlan('strength-4')
+    expect(S().block ?? null).toBe(null)
+    loadStarterPlan('strength-4', null, { withBlock: true })
+    expect(S().block).toMatchObject({ kind: 'strength', weeks: 8, repeat: true })
+    expect(S().block.start).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 
   it('refuses a plan it does not know and changes nothing', () => {

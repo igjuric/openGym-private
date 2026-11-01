@@ -33,6 +33,7 @@ import { limitsFrom, fmtMB, MB } from '../lib/media-limits.js'
 import { setRestAccent } from '../lib/rest-alert.js'
 import { CUSTOM, accentKey, adjustedIn, applyAccent, cleanHex, inkOn, isGrey } from '../lib/accent.js'
 import { checkForUpdate, downloadAndInstall, fetchChecksum, forgetDownloadedUpdate, RELEASES_PAGE } from '../lib/update.js'
+import { openTour } from '../components/Tour.jsx'
 import { APK_VARIANT, VARIANT_NAMES } from '../lib/apk-variant.js'
 import { BUILTIN_PX } from '../lib/anim-quality.js'
 import { selfUpdates } from '../lib/channel.js'
@@ -858,11 +859,6 @@ export default function Settings({ page = null, find = null, via = null, entryKe
           value={activeSeasonTitle(S)} accessory="chevron" onClick={() => open('themes')} />
       </Section>
       <Section title={t('On Home')}>
-        {/* Membership QR codes on Home (views/CheckIn.jsx); off = no Home card, no route. */}
-        <Row icon="qr" iconTint="var(--blue)" title={t('Gym check-in')}
-          subtitle={t('Show a card on Home with your membership QR codes.')}>
-          <Switch checked={S.checkIn !== false} onChange={v => update(s => { s.checkIn = v })} />
-        </Row>
         {/* The Home summary is optional; hiding it leaves weight logging, history and Stats intact. */}
         <Row icon="scale" iconTint="var(--green)" title={t('Body weight')}
           subtitle={t('Show the body weight card on Home.')}>
@@ -966,6 +962,9 @@ export default function Settings({ page = null, find = null, via = null, entryKe
           : <Row icon="download" iconTint="var(--green)" title={t('Get the Android app')}
               subtitle={t('Download the APK from opengym.ch')} accessory="chevron"
               onClick={() => window.open('https://opengym.ch/#download', '_blank', 'noopener')} />}
+      </Section>
+      <Section>
+        <Row icon="lightbulb" iconTint="var(--yellow)" title={t('Show the app tour')} accessory="chevron" onClick={openTour} />
       </Section>
       {/* Support: the project's own donation pages, and on the iPhone a straight line to writing a
           review. Plain links, no pop-up asking for anything (App Store 5.6.1). */}
@@ -1295,6 +1294,10 @@ function NudgeRows({ S, setReminder }) {
         value={toneOf(r)} onChange={v => setReminder({ tone: v })}
         options={NUDGE_TONES.map(k => ({ value: k, label: toneLabel(k), subtitle: t(NUDGE_COPY[k].title) }))} />
     )}
+    {/* The weekly summary (lib/weekly-summary.js) rides on the reminder the same way. */}
+    <Row icon="chartLine" iconTint="var(--green)" title={t('Weekly summary')} subtitle={t('On the last day of your week at 19:00: workouts, weight lifted and records.')}>
+      <Switch checked={!!r.summary} onChange={() => setReminder({ summary: !r.summary })} aria-label={t('Weekly summary')} />
+    </Row>
   </>
 }
 const toneLabel = k => k === 'guilt' ? t('Guilt trip') : k === 'drill' ? t('Drill sergeant') : t('Friendly')

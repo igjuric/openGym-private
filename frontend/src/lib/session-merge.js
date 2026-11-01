@@ -16,17 +16,19 @@ import { buildSessionEntries } from './session-start.js'
  * - concatenates each routine's entries in list order
  * - stamps `entry.rid` = that routine's id on every entry
  *
+ * `day` is the session's date (today when left out), for the week of a training block.
+ *
  * Returns `{ entries, routineIds, routines }` — `routineIds` / `routines` are the resolved,
  * de-duplicated list, so a caller stores exactly what was built.
  */
-export function buildCombinedEntries(st, routineIds) {
+export function buildCombinedEntries(st, routineIds, day) {
   const seen = new Set()
   const routines = [].concat(routineIds ?? [])
     .filter(id => id && !seen.has(id) && seen.add(id))
     .map(id => (st.routines || []).find(r => r.id === id))
     .filter(Boolean)
   const entries = routines.flatMap(r =>
-    buildSessionEntries(st, r).map(e => ({ ...e, rid: r.id }))
+    buildSessionEntries(st, r, day).map(e => ({ ...e, rid: r.id }))
   )
   return { entries, routineIds: routines.map(r => r.id), routines }
 }

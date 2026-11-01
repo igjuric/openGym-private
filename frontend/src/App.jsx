@@ -65,13 +65,13 @@ function lazyView(load) {
 const Admin = lazyView(() => import('./views/Admin.jsx'))
 const CoachChat = lazyView(() => import('./views/CoachChat.jsx'))
 const Measurements = lazyView(() => import('./views/Measurements.jsx'))
+const Milestones = lazyView(() => import('./views/Milestones.jsx'))
 const CoachIntake = lazyView(() => import('./views/CoachIntake.jsx'))
 const CoachSetup = lazyView(() => import('./views/CoachSetup.jsx'))
 const StructuralBalance = lazyView(() => import('./views/StructuralBalance.jsx'))
 const ProgressPhotos = lazyView(() => import('./views/ProgressPhotos.jsx'))
 // The tabs and screens past Home (Stats, History, the Library, Settings, ...) as well: a start
 // only needs Home, and these are fetched right behind it the same way.
-const CheckIn = lazyView(() => import('./views/CheckIn.jsx'))
 const RoutineEdit = lazyView(() => import('./views/RoutineEdit.jsx'))
 const Stats = lazyView(() => import('./views/Stats.jsx'))
 const History = lazyView(() => import('./views/History.jsx'))
@@ -291,9 +291,6 @@ function Shell() {
   const view = l => (!authed ? <Login /> : needsMobileOnboarding ? <MobileOnboarding /> : permSteps ? <PermissionSteps /> : (
     <Routes location={l}>
       <Route path="/home" element={<Home />} />
-      {/* Gym check-in — switched off in Settings, the route falls through to the
-          catch-all redirect below. */}
-      {S.checkIn !== false && <Route path="/checkin" element={<CheckIn />} />}
       <Route path="/plan" element={<Plan />} />
       <Route path="/plan/r/:id" element={<RoutineEdit />} />
       <Route path="/workout" element={<Workout />} />
@@ -304,6 +301,7 @@ function Shell() {
       <Route path="/structural-balance" element={<StructuralBalance />} />
       <Route path="/progress-photos" element={<ProgressPhotos />} />
       <Route path="/measurements" element={<Measurements />} />
+      <Route path="/milestones" element={<Milestones />} />
       <Route path="/settings" element={<SettingsRoute />} />
       <Route path="/settings/:page" element={<SettingsRoute />} />
       {/* The Coach screens gate themselves on the instance config; the routes exist

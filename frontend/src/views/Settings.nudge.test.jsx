@@ -129,6 +129,17 @@ describe.each([['self-hosted (web push)', false], ['mobile (native)', true]])('S
     expect(toneRow()).toBeFalsy()
   })
 
+  it('offers the weekly summary beside it, off until switched on, and never touching the nudge', async () => {
+    await mount()
+    const summary = () => row('Weekly summary')
+    expect(summary()).toBeTruthy()
+    expect(summary().querySelector('[role=switch]').getAttribute('aria-checked')).toBe('false')
+    await act(async () => { summary().querySelector('[role=switch]').click() })
+    await mount()
+    expect(mocks.S.reminder).toMatchObject({ on: true, time: '08:00', summary: true })
+    expect(mocks.S.reminder.nudge).toBeFalsy()
+  })
+
   // The iPhone UI test (ios/App/AppUITests) finds these switches by name; so does VoiceOver.
   it('names its switch, so it can be found without reading the row around it', async () => {
     await mount()

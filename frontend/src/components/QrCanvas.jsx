@@ -2,14 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import { renderQrToCanvas } from '../lib/qr.js'
 import { t } from '../lib/i18n.js'
 
-// Renders a gym check-in code as a QR image on a <canvas>. lean-qr draws one module per pixel;
+// Renders a value as a QR image on a <canvas>. lean-qr draws one module per pixel;
 // CSS (.qr-canvas) scales it up with image-rendering: pixelated so it stays razor-sharp at any
-// display size without re-generating. Regenerated from `value` on every change — we never store
-// the picture (see lib/qr.js).
+// display size without re-generating. Regenerated from `value` on every change (see lib/qr.js).
 //
 // The lib loads via dynamic import, so the first paint is a frame behind; a plain box holds the
 // space until then. A render failure (empty value, lib load error) shows nothing rather than a
-// broken canvas — the caller decides what an unusable card looks like.
+// broken canvas — the caller decides what an unusable code looks like.
 export default function QrCanvas({ value, size = 240, className = '' }) {
   const ref = useRef(null)
   const [ok, setOk] = useState(false)
