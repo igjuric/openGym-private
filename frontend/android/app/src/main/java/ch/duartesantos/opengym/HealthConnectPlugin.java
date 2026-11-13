@@ -8,15 +8,27 @@ import androidx.activity.result.contract.ActivityResultContract;
 import androidx.health.connect.client.HealthConnectClient;
 import androidx.health.connect.client.HealthConnectFeatures;
 import androidx.health.connect.client.PermissionController;
+import androidx.health.connect.client.aggregate.AggregateMetric;
+import androidx.health.connect.client.aggregate.AggregationResult;
+import androidx.health.connect.client.aggregate.AggregationResultGroupedByPeriod;
+import androidx.health.connect.client.records.BodyFatRecord;
+import androidx.health.connect.client.records.BodyWaterMassRecord;
+import androidx.health.connect.client.records.BoneMassRecord;
 import androidx.health.connect.client.records.ExerciseSessionRecord;
 import androidx.health.connect.client.records.HeartRateRecord;
+import androidx.health.connect.client.records.HydrationRecord;
+import androidx.health.connect.client.records.LeanBodyMassRecord;
+import androidx.health.connect.client.records.NutritionRecord;
 import androidx.health.connect.client.records.Record;
 import androidx.health.connect.client.records.WeightRecord;
 import androidx.health.connect.client.records.metadata.Metadata;
+import androidx.health.connect.client.request.AggregateGroupByPeriodRequest;
 import androidx.health.connect.client.request.ReadRecordsRequest;
 import androidx.health.connect.client.response.ReadRecordsResponse;
 import androidx.health.connect.client.time.TimeRangeFilter;
+import androidx.health.connect.client.units.Energy;
 import androidx.health.connect.client.units.Mass;
+import androidx.health.connect.client.units.Volume;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -25,6 +37,9 @@ import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.Period;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -69,6 +84,13 @@ import org.json.JSONObject;
  *   await HC.requestPermissions({ read: ['heartRate'], write: [] });  // { granted, read: { heartRate, weight } }
  *   await HC.readHeartRate({ from, to });   // { samples: [[ms, bpm]], origins: [package] }
  *   await HC.readWeights({ since });        // { records: [{ t, kg, id, origin, clientId }] }
+ * Since v1.4.6, from any app that saves them (a smart scale's, a food diary's, Google Health's):
+ *   await HC.readBody({ since });           // { records: [{ type, t, value, id, origin, clientId }] }
+ *     type: 'bodyFat' (percent) | 'leanMass' | 'boneMass' | 'bodyWater' (kg); only the granted ones
+ *   await HC.readNutrition({ from, to, nutrition, water });  // { days: [{ d, kcal, protein, fat, carbs, water }] }
+ *     per local day from `from` (YYYY-MM-DD) to `to` inclusive, grams and millilitres. Health
+ *     Connect's own aggregate, so a meal two apps both saved is counted once, by the user's app
+ *     priority in Health Connect.
  * Foreground only: no READ_HEALTH_DATA_IN_BACKGROUND. Without READ_HEALTH_DATA_HISTORY Health
  * Connect gives 30 days back from the first grant, plenty for the workout just done; weigh-ins
  * ask for it too (read: ['weight', 'history']) where Health Connect has the feature, which
@@ -84,6 +106,10 @@ public class HealthConnectPlugin extends Plugin {
     private static final String READ_HEART_RATE = "android.permission.health.READ_HEART_RATE";
     private static final String READ_WEIGHT = "android.permission.health.READ_WEIGHT";
     private static final String READ_HISTORY = "android.permission.health.READ_HEALTH_DATA_HISTORY";
+    // The JS names of the body-composition reads, each its own permission (HealthRead.readPermission).
+    private static final String[] BODY = { "bodyFat", "leanMass", "boneMass", "bodyWater" };
+    // A day's totals are asked for at most this many days at once.
+    private static final int MAX_DAYS = 400;
     // Records per page when reading, and pages at most: a few hours of heart rate fit easily.
     private static final int PAGE = 1000;
     private static final int MAX_PAGES = 50;
@@ -314,6 +340,165 @@ public class HealthConnectPlugin extends Plugin {
         });
     }
 
+    @PluginMethod
+    public void readBody(PluginCall call) {
+        if (!"available".equals(sdkStatus())) {
+            call.reject("Health Connect is not available", "unavailable");
+            return;
+        }
+        Long since = millis(call, "since");
+        if (since == null) {
+            call.reject("since is needed", "failed");
+            return;
+        }
+        worker.execute(() -> {
+            try {
+                Set<String> got = granted();
+                TimeRangeFilter range = TimeRangeFilter.after(Instant.ofEpochMilli(since));
+                List<HealthRead.Body> found = new ArrayList<>();
+                int asked = 0;
+                // Only the types the user granted: a refused one would throw for the whole read.
+                for (String type : BODY) {
+                    if (!got.contains(HealthRead.readPermission(type))) continue;
+                    asked++;
+                    switch (type) {
+                        case "bodyFat":
+                            for (BodyFatRecord r : read(BodyFatRecord.class, range))
+                                add(found, HealthRead.body(type, r.getTime().toEpochMilli(), r.getPercentage().getValue(), r.getMetadata()));
+                            break;
+                        case "leanMass":
+                            for (LeanBodyMassRecord r : read(LeanBodyMassRecord.class, range))
+                                add(found, HealthRead.body(type, r.getTime().toEpochMilli(), r.getMass().getKilograms(), r.getMetadata()));
+                            break;
+                        case "boneMass":
+                            for (BoneMassRecord r : read(BoneMassRecord.class, range))
+                                add(found, HealthRead.body(type, r.getTime().toEpochMilli(), r.getMass().getKilograms(), r.getMetadata()));
+                            break;
+                        case "bodyWater":
+                            for (BodyWaterMassRecord r : read(BodyWaterMassRecord.class, range))
+                                add(found, HealthRead.body(type, r.getTime().toEpochMilli(), r.getMass().getKilograms(), r.getMetadata()));
+                            break;
+                        default: break;
+                    }
+                }
+                if (asked == 0) {
+                    call.reject("No body measurement may be read", "permission");
+                    return;
+                }
+                JSArray records = new JSArray();
+                for (HealthRead.Body b : found) {
+                    JSObject o = new JSObject();
+                    o.put("type", b.type);
+                    o.put("t", b.t);
+                    o.put("value", b.value);
+                    o.put("id", b.id);
+                    o.put("origin", b.origin);
+                    o.put("clientId", b.clientId);
+                    records.put(o);
+                }
+                JSObject out = new JSObject();
+                out.put("records", records);
+                call.resolve(out);
+            } catch (SecurityException e) {
+                call.reject(e.getMessage(), "permission");
+            } catch (Exception e) {
+                call.reject(e.getMessage(), "failed");
+            }
+        });
+    }
+
+    private static void add(List<HealthRead.Body> to, HealthRead.Body b) {
+        if (b != null) to.add(b);
+    }
+
+    @PluginMethod
+    public void readNutrition(PluginCall call) {
+        if (!"available".equals(sdkStatus())) {
+            call.reject("Health Connect is not available", "unavailable");
+            return;
+        }
+        LocalDate from, to;
+        try {
+            from = LocalDate.parse(call.getString("from", ""));
+            to = LocalDate.parse(call.getString("to", ""));
+        } catch (Exception e) {
+            call.reject("from and to are needed", "failed");
+            return;
+        }
+        if (to.isBefore(from) || from.plusDays(MAX_DAYS).isBefore(to)) {
+            call.reject("from and to are out of range", "failed");
+            return;
+        }
+        boolean food = Boolean.TRUE.equals(call.getBoolean("nutrition", false));
+        boolean water = Boolean.TRUE.equals(call.getBoolean("water", false));
+        worker.execute(() -> {
+            try {
+                Set<String> got = granted();
+                boolean readFood = food && got.contains(HealthRead.readPermission("nutrition"));
+                boolean readWater = water && got.contains(HealthRead.readPermission("hydration"));
+                if (!readFood && !readWater) {
+                    call.reject("Neither nutrition nor water may be read", "permission");
+                    return;
+                }
+                Set<AggregateMetric<?>> metrics = new HashSet<>();
+                if (readFood) {
+                    metrics.add(NutritionRecord.ENERGY_TOTAL);
+                    metrics.add(NutritionRecord.PROTEIN_TOTAL);
+                    metrics.add(NutritionRecord.TOTAL_FAT_TOTAL);
+                    metrics.add(NutritionRecord.TOTAL_CARBOHYDRATE_TOTAL);
+                }
+                if (readWater) metrics.add(HydrationRecord.VOLUME_TOTAL);
+                // Local days: the slicer cuts at midnight where the phone is.
+                AggregateGroupByPeriodRequest req = new AggregateGroupByPeriodRequest(metrics,
+                        TimeRangeFilter.between(from.atStartOfDay(), to.plusDays(1).atStartOfDay()),
+                        Period.ofDays(1), Collections.emptySet());
+                @SuppressWarnings("unchecked")
+                List<AggregationResultGroupedByPeriod> groups = (List<AggregationResultGroupedByPeriod>) BuildersKt.runBlocking(
+                        EmptyCoroutineContext.INSTANCE, (scope, cont) -> client().aggregateGroupByPeriod(req, cont));
+                JSArray days = new JSArray();
+                for (AggregationResultGroupedByPeriod g : groups) {
+                    LocalDateTime start = g.getStartTime();
+                    AggregationResult r = g.getResult();
+                    HealthRead.Day day = new HealthRead.Day(start.toLocalDate().toString());
+                    if (readFood) {
+                        Energy e = r.get(NutritionRecord.ENERGY_TOTAL);
+                        Mass p = r.get(NutritionRecord.PROTEIN_TOTAL);
+                        Mass f = r.get(NutritionRecord.TOTAL_FAT_TOTAL);
+                        Mass c = r.get(NutritionRecord.TOTAL_CARBOHYDRATE_TOTAL);
+                        day.kcal = HealthRead.total(e == null ? null : e.getKilocalories());
+                        day.protein = HealthRead.total(p == null ? null : p.getGrams());
+                        day.fat = HealthRead.total(f == null ? null : f.getGrams());
+                        day.carbs = HealthRead.total(c == null ? null : c.getGrams());
+                    }
+                    if (readWater) {
+                        Volume v = r.get(HydrationRecord.VOLUME_TOTAL);
+                        day.water = HealthRead.total(v == null ? null : v.getMilliliters());
+                    }
+                    if (day.empty()) continue;
+                    JSObject o = new JSObject();
+                    o.put("d", day.d);
+                    if (readFood) {
+                        o.put("kcal", day.kcal == null ? JSONObject.NULL : day.kcal);
+                        o.put("protein", day.protein == null ? JSONObject.NULL : day.protein);
+                        o.put("fat", day.fat == null ? JSONObject.NULL : day.fat);
+                        o.put("carbs", day.carbs == null ? JSONObject.NULL : day.carbs);
+                    }
+                    if (readWater) o.put("water", day.water == null ? JSONObject.NULL : day.water);
+                    days.put(o);
+                }
+                JSObject out = new JSObject();
+                out.put("days", days);
+                out.put("nutrition", readFood);
+                out.put("water", readWater);
+                call.resolve(out);
+            } catch (SecurityException e) {
+                call.reject(e.getMessage(), "permission");
+            } catch (Exception e) {
+                call.reject(e.getMessage(), "failed");
+            }
+        });
+    }
+
     // Every page of one record type in the window, oldest first.
     @SuppressWarnings("unchecked")
     private <T extends Record> List<T> read(Class<T> type, TimeRangeFilter range) throws InterruptedException {
@@ -359,6 +544,9 @@ public class HealthConnectPlugin extends Plugin {
         r.put("heartRate", granted.contains(READ_HEART_RATE));
         r.put("weight", granted.contains(READ_WEIGHT));
         r.put("history", granted.contains(READ_HISTORY));
+        for (String type : BODY) r.put(type, granted.contains(HealthRead.readPermission(type)));
+        r.put("nutrition", granted.contains(HealthRead.readPermission("nutrition")));
+        r.put("hydration", granted.contains(HealthRead.readPermission("hydration")));
         return r;
     }
 

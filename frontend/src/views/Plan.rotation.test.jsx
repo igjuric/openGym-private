@@ -61,9 +61,14 @@ const rows = () => [...host.querySelectorAll('.rotation-row')]
 const names = () => rows().map(r => r.querySelector('.tt').textContent)
 const click = el => act(() => el.dispatchEvent(new MouseEvent('click', { bubbles: true })))
 const byLabel = label => [...host.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === label || b.textContent.trim() === label)
-const modeButtons = () => [...host.querySelectorAll('.plan-mode .seg button')]
-const pickMode = label => click(modeButtons().find(b => b.textContent === label))
-const selectedMode = () => modeButtons().find(b => b.className.includes('on'))?.textContent
+// How you train is a row (v1.4.6): its title is the mode, a tap opens a two-choice menu.
+const modeRow = () => host.querySelector('.plan-mode .lrow')
+const pickMode = label => {
+  click(modeRow())
+  const item = menuSheet.mock.calls.at(-1)[0].items.find(it => it.label === label)
+  act(() => item.onClick())
+}
+const selectedMode = () => modeRow()?.querySelector('.lrow-t')?.textContent
 const headings = () => [...host.querySelectorAll('h4.sec')].map(h => h.firstChild.textContent)
 const subtitle = () => host.querySelector('.hdr .sub').textContent
 
@@ -263,7 +268,9 @@ describe('Plan — the loop', () => {
 describe('Plan — someone else’s queue, and a broken one', () => {
   it('an externally written pass is locked: no mode control, no edits, adoption behind a confirm', () => {
     mount({ queue: live(), scheduleMode: 'rotation' })   // no rotationId, no rotation
-    expect(modeButtons()).toEqual([])
+    // shown, not offered: the row has no tap and no chevron
+    expect(modeRow().tagName).toBe('DIV')
+    expect(modeRow().querySelector('.lrow-s').textContent).toBe('Externally managed')
     expect(host.querySelector('.plan-mode').textContent).toContain('Externally managed')
     expect(byLabel('Build a rotation instead')).toBeUndefined()
     expect(byLabel('Edit')).toBeUndefined()
@@ -394,5 +401,30 @@ describe('Plan — rest days and repeats in the loop (#536)', () => {
     const tomorrow = isoOf(new Date(Date.now() + 86400000))
     mount({ queue: live({ rotationId: 'r1', ids: ['c'], startsOn: tomorrow }), rotation: { ...saved, sequence: ['a', 'b', 'rest', 'c'], at: 3 } })
     expect(host.textContent).toContain('Rest day. The loop goes on ' + fmtDate(tomorrow, true) + '.')
+  })
+})
+
+// v1.4.6: one tab bar at the top; How you train is a row in the plan card that opens a picker.
+describe('Plan — the schedule picker', () => {
+  it('shows the mode as a row, and the picker explains both with the current one marked', () => {
+    mount()
+    expect(host.querySelectorAll('.seg').length).toBe(1)   // only Schedule | Routines
+    expect(selectedMode()).toBe('Fixed Week')
+    expect(modeRow().querySelector('.lrow-s').textContent).toBe('Same routines on the same weekdays')
+    click(modeRow())
+    const menu = menuSheet.mock.calls.at(-1)[0]
+    expect(menu.title).toBe('How do you want to schedule?')
+    expect(menu.items.map(it => [it.label, it.on])).toEqual([['Fixed Week', true], ['Rotation', false]])
+    expect(menu.items[1].sub).toContain('Whatever is next stays next')
+  })
+
+  it('retires the muscle volume notice once it is followed', () => {
+    mount()
+    const notice = () => [...host.querySelectorAll('.plan-link button')].find(b => b.textContent.includes('Weekly muscle volume'))
+    click(notice())
+    expect(mocks.nav).toHaveBeenCalledWith('/stats?focus=weekly-volume')
+    expect(mocks.S.hints.volumeMoved).toBe(true)
+    remount()
+    expect(notice()).toBeUndefined()
   })
 })

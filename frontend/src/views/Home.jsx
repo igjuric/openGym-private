@@ -21,6 +21,9 @@ import { dayNoteOf } from '../lib/day-notes.js'
 import { weighInAt } from '../lib/bodyweight.js'
 import WeightRate from '../components/WeightRate.jsx'
 import { SeasonDeco } from '../components/Seasonal.jsx'
+import NutritionCard from '../components/NutritionCard.jsx'
+import { nutritionInUse } from '../lib/nutrition.js'
+import { measurementValue } from '../lib/measurements.js'
 
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
 export default function Home() {
@@ -100,6 +103,11 @@ export default function Home() {
   // The streak card's fraction: this calendar week's workouts over the weekdays with a plan, or,
   // in a coach week, the queue's sessions and your own days together (lib/queue.js weekTally).
   const { done: doneThisWeek, planned: plannedPerWeek } = weekTally(S, todayISO())
+  // The scale's second number (v1.4.6): the latest body fat of the last 30 days, and how it moved
+  // since the reading before. Only a line; the curve lives in Body measurements.
+  const fatDays = (S.measurements || []).filter(m => measurementValue(m, 'bodyFat') != null)
+  const fat = fatDays.at(-1) && fatDays.at(-1).d >= isoOf(new Date(Date.now() - 30 * 86400000)) ? fatDays.at(-1) : null
+  const fatDelta = fat && fatDays.length > 1 ? Math.round((measurementValue(fat, 'bodyFat') - measurementValue(fatDays.at(-2), 'bodyFat')) * 10) / 10 : null
   const bwPoints = S.bodyweight.slice(-30).map(b => ({ t: weighInAt(b), y: b.w, d: b.d }))
 
   // today's session shown right under the week strip
@@ -184,6 +192,22 @@ export default function Home() {
       <SeasonDeco spot="home-hero" />
     </div>
 
+    <div className="card tappable" style={{ cursor: 'pointer' }} {...tappable(() => calendarSheet())}>
+      <SeasonDeco spot="home-streak" />
+      <div className="row between">
+        <div>
+          <div className="row" style={{ gap: 7, fontSize: 22, fontWeight: 600, letterSpacing: '-.021em' }}>
+            <Icon name="flame" style={{ color: 'var(--orange)' }} />
+            {t('{0} week streak', streakWeeks(S))}
+          </div>
+          <div className="muted small" style={{ marginTop: 2 }}>{doneThisWeek}{plannedPerWeek ? ' / ' + plannedPerWeek : ''} {t('this week')} · {tn('{0} workout total', '{0} workouts total', S.workouts.length)}</div>
+        </div>
+        <Icon name="calendar" className="chev" style={{ fontSize: 20 }} />
+      </div>
+    </div>
+
+    {/* Today's food and water (v1.4.6), for someone who uses nutrition and kept the card on. */}
+    {S.showNutritionCard !== false && nutritionInUse(S) && <NutritionCard />}
 
     {S.showWeightCard !== false && <div className="card">
       <div className="row between bw-head" style={{ marginBottom: 6 }}>
@@ -205,6 +229,10 @@ export default function Home() {
           )}
           <span className="dim small" style={{ marginInlineStart: 'auto' }}>{fmtDate(bw.d, true)}</span>
         </div>
+        {fat && <div className="small row bw-fat" style={{ marginTop: 4, gap: 5 }}>
+          <span className="muted">{t('Body fat')}</span><b>{fmtNum(measurementValue(fat, 'bodyFat'))}%</b>
+          {!!fatDelta && <span className="row" style={{ gap: 2, color: 'var(--label-2)' }}><Icon name={fatDelta > 0 ? 'arrowUp' : 'arrowDown'} style={{ fontSize: 11 }} />{fmtNum(Math.abs(fatDelta))}</span>}
+        </div>}
         {S.targetW && (
           <div className="small row" style={{ color: 'var(--yellow)', marginTop: 4, gap: 5 }}>
             <Icon name="target" style={{ fontSize: 13 }} />
@@ -223,18 +251,5 @@ export default function Home() {
         : t("No weigh-ins yet. Log your weight to start the curve (we also ask before every workout).")}</div>}
     </div>}
 
-    <div className="card tappable" style={{ cursor: 'pointer' }} {...tappable(() => calendarSheet())}>
-      <SeasonDeco spot="home-streak" />
-      <div className="row between">
-        <div>
-          <div className="row" style={{ gap: 7, fontSize: 22, fontWeight: 600, letterSpacing: '-.021em' }}>
-            <Icon name="flame" style={{ color: 'var(--orange)' }} />
-            {t('{0} week streak', streakWeeks(S))}
-          </div>
-          <div className="muted small" style={{ marginTop: 2 }}>{doneThisWeek}{plannedPerWeek ? ' / ' + plannedPerWeek : ''} {t('this week')} · {tn('{0} workout total', '{0} workouts total', S.workouts.length)}</div>
-        </div>
-        <Icon name="calendar" className="chev" style={{ fontSize: 20 }} />
-      </div>
-    </div>
   </div>
 }

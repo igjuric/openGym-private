@@ -7,7 +7,7 @@ import {
   fromMeasurementDisplay, latestMeasurement, measurementEntryHasValues,
   measurementSeries, measurementUnit, measurementValue, normalizeMeasurementEntry,
   toMeasurementDisplay, normalizeMeasurementsState, CUSTOM_MEASUREMENT_UNITS, customMeasurementUnits,
-  measurementUnitLabel, zeroIsReading,
+  measurementUnitLabel, zeroIsReading, isImportedValue, builtinFor, adoptCustomMeasurement,
 } from '../lib/measurements.js'
 import { fmtDate, fmtNum, todayISO, uid } from '../lib/format.js'
 import { t } from '../lib/i18n.js'
@@ -29,6 +29,8 @@ const shownValue = (entry, field, profileUnit) => {
   if (value == null) return null
   return toMeasurementDisplay(value, profileUnit, field)
 }
+// Where an imported value came from (v1.4.6): the phone's health hub, named.
+export const sourceLabel = src => src === 'ah' ? t('From Apple Health') : t('From Health Connect')
 
 function MeasurementLog({ sourceDate, close }) {
   const S = useStore(s => s.S)
@@ -47,7 +49,8 @@ function MeasurementLog({ sourceDate, close }) {
     }
   }
   const [date, setDate] = useState(source?.d || todayISO())
-  const [values, setValues] = useState(() => Object.fromEntries(fields.map(f => [f.key, shownValue(source, f, S.unit)])))
+  const [initial] = useState(() => Object.fromEntries(fields.map(f => [f.key, shownValue(source, f, S.unit)])))
+  const [values, setValues] = useState(initial)
 
   const save = () => {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > todayISO()) { toast(t('Choose a valid date')); return }
@@ -72,7 +75,9 @@ function MeasurementLog({ sourceDate, close }) {
           if (field.unit) item.unit = field.unit
         }
       } else if (field.key === 'bodyFat') base.bodyFat = value
-      else base[field.key] = value == null ? null : fromMeasurementDisplay(value, S.unit)
+      else base[field.key] = value == null ? null : fromMeasurementDisplay(value, S.unit, field)
+      // A value from the health hub left as it was keeps its mark; one changed here is yours.
+      if (!field.custom && base.src?.[field.key] && raw !== initial[field.key]) delete base.src[field.key]
     }
     if (!measurementEntryHasValues(base)) { toast(t('Enter at least one measurement')); return }
     // `t` is when the check-in was last saved: the newer one of a day wins a sync merge, the
@@ -95,7 +100,8 @@ function MeasurementLog({ sourceDate, close }) {
     </label>
     {fields.length ? <div className="measure-form">
       {fields.map(field => <label className="measure-field" key={field.key}>
-        <span>{t(field.label)}</span>
+        <span>{t(field.label)}{isImportedValue(source, field.key) && values[field.key] === initial[field.key] &&
+          <small className="dim" style={{ display: 'block', fontWeight: 400 }}>{sourceLabel(source.src[field.key])}</small>}</span>
         <span className="measure-input">
           <NumberField nullable value={values[field.key]} onChange={value => setValues(v => ({ ...v, [field.key]: value }))} />
           <i>{fieldUnit(field, S.unit)}</i>
@@ -111,6 +117,24 @@ function MeasurementLog({ sourceDate, close }) {
 
 export function measurementLogSheet(sourceDate = null) {
   return useUI.getState().openSheet(close => <MeasurementLog sourceDate={sourceDate} close={close} />)
+}
+
+// A custom field that duplicates a built-in one (v1.4.6): one tap moves its history over, so Health
+// Connect and your own entries end up in one metric instead of two.
+function AdoptRow({ field, builtin }) {
+  const adopt = () => confirmSheet({
+    title: t('Use the built-in {0}?', t(builtin.label)),
+    message: t('Moves every {0} reading into {1} and removes your custom field. A day that already has {1} keeps it.', field.name, t(builtin.label)),
+    confirmText: t('Move'),
+    onConfirm: () => {
+      update(state => { adoptCustomMeasurement(state, field.id, builtin.key) })
+      toast(t('Moved into {0}', t(builtin.label)))
+    },
+  })
+  return <div className="lrow">
+    <span className="lrow-m"><span className="lrow-s">{t('Same as the built-in {0}, which Health Connect can fill too.', t(builtin.label))}</span></span>
+    <Button size="sm" onClick={adopt}>{t('Merge')}</Button>
+  </div>
 }
 
 function ManageMeasurements({ close }) {
@@ -157,6 +181,7 @@ function ManageMeasurements({ close }) {
         <SelectRow title={t('Measurement unit')} value={measurementUnit(S.unit, field)}
           options={unitOptions(customMeasurementUnits(field, S.measurements))}
           onChange={value => setCustomUnit(field.id, value)} />
+        {builtinFor(field) && <AdoptRow field={field} builtin={MEASUREMENT_FIELDS.find(f => f.key === builtinFor(field))} />}
       </div>)}
     </Section>)}
     <div className="muted small" style={{ marginBottom: 12 }}>{t('Logged values keep their type. Add a new measurement to use a different type.')}</div>
@@ -257,7 +282,7 @@ export default function Measurements() {
             <button className="iconbtn" style={{ color: 'var(--red)' }} onClick={() => remove(entry)} aria-label={t('Delete')}><Icon name="trash" /></button>
           </div>
         </div>
-        {previewFields.length > 0 && <div className="measure-preview">{previewFields.map(({ field: f, value }) => <span key={f.key}>{t(f.label)} <b>{withUnit(value, fieldUnit(f, S.unit))}</b></span>)}</div>}
+        {previewFields.length > 0 && <div className="measure-preview">{previewFields.map(({ field: f, value }) => <span key={f.key}>{t(f.label)} <b>{withUnit(value, fieldUnit(f, S.unit))}</b>{isImportedValue(entry, f.key) && <Icon name="heart" size={12} aria-label={sourceLabel(entry.src[f.key])} />}</span>)}</div>}
       </div>
     })}</div> : <div className="empty small">{t('No measurements yet')}</div>}
   </div>

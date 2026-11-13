@@ -18,6 +18,8 @@ export const PAGES = {
   look: { title: 'Look & Home', icon: 'palette', tint: 'var(--purple)' },
   coach: { title: 'AI Coach', icon: 'sparkles', tint: 'var(--green)' },
   watch: { title: 'Apple Watch', icon: 'watch', tint: 'var(--grey)' },
+  // Phone app only (v1.4.6): Health Connect / Apple Health, writing and reading back.
+  health: { title: 'Health & integrations', icon: 'heart', tint: 'var(--red)' },
   data: { title: 'Data & backup', icon: 'folder', tint: 'var(--blue)' },
   about: { title: 'About & updates', icon: 'info', tint: 'var(--grey)' },
   account: { title: 'Account', icon: 'personCircle', tint: 'var(--grey)' },
@@ -31,7 +33,7 @@ export const PAGES = {
 export const PAGE_IDS = Object.keys(PAGES)
 
 // The root, top to bottom. Whether a row shows is pageVisible's call.
-export const ROOT_GROUPS = [['workout', 'alerts', 'reminders'], ['plan', 'units', 'equipment'], ['look', 'coach', 'watch'], ['data', 'about']]
+export const ROOT_GROUPS = [['workout', 'alerts', 'reminders'], ['plan', 'units', 'equipment'], ['look', 'coach', 'watch'], ['health', 'data', 'about']]
 
 /**
  * Whether a page exists for this device and profile. Reminders need a push server (signed in) or
@@ -43,6 +45,8 @@ export function pageVisible(page, ctx) {
   if (page === 'coach') return !!ctx.mobile
   // The iPhone app only: the watch app ships inside it.
   if (page === 'watch') return !!ctx.ios
+  // The phone app only: the phone's health hub is not there for a browser.
+  if (page === 'health') return !!ctx.mobile
   // The phone app only: a browser cannot watch where you are with the page closed.
   if (page === 'gym' || page === 'gym-edit') return !!ctx.mobile
   return page in PAGES
@@ -126,12 +130,16 @@ export const SEARCH = [
   { page: 'look', title: 'Body diagram', icon: 'figureStrength', tint: 'var(--teal)', kw: 'muscle map body male female', opts: ['Male', 'Female'] },
   { page: 'look', title: 'Exercise drawings', icon: 'figureStrength', tint: 'var(--teal)', kw: 'figure male female woman man picture', opts: ['Male', 'Female'] },
   { page: 'look', title: 'Body weight', icon: 'scale', tint: 'var(--green)', kw: 'weight card home' },
+  { page: 'look', title: 'Nutrition', icon: 'flame', tint: 'var(--orange)', kw: 'nutrition food calories protein water card home' },
   { page: 'look', title: 'Seasonal themes', icon: 'pumpkin', tint: 'var(--orange)', kw: 'seasonal season holiday halloween theme decoration' },
   // Seasonal themes
   { page: 'themes', title: 'Halloween', icon: 'pumpkin', tint: 'var(--orange)', kw: 'halloween seasonal theme spooky spider pumpkin bats witch october decoration', opts: ['Auto', 'On', 'Off'] },
   { page: 'themes', title: 'Also during workouts', icon: 'play', tint: 'var(--green)', kw: 'halloween seasonal workout training decoration' },
   { page: 'themes', title: 'Spooky colors', icon: 'palette', tint: 'var(--purple)', kw: 'halloween orange purple accent color colour seasonal' },
   { page: 'look', title: 'Show connection status', icon: 'cloud', tint: 'var(--blue)', kw: 'sync offline banner bar connection', when: c => !c.demo },
+  // Health & integrations
+  { page: 'health', title: 'Body measurements', icon: 'ruler', tint: 'var(--teal)', kw: 'body fat lean muscle mass bone water composition smart scale health connect google health fitbit apple health' },
+  { page: 'health', title: 'Nutrition', icon: 'flame', tint: 'var(--orange)', kw: 'food calories kcal protein fat carbs carbohydrates macros water hydration drink diet health connect google health fitbit' },
   // Data & backup
   { page: 'data', title: 'Export backup (JSON)', icon: 'share', tint: 'var(--blue)', kw: 'export backup json download save' },
   { page: 'data', title: 'Export with photos & videos (.zip)', icon: 'share', tint: 'var(--blue)', kw: 'zip media export backup', when: c => c.hasMedia },

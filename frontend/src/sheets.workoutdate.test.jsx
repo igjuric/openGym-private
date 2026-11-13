@@ -26,7 +26,8 @@ const type = (el, value) => {
   Object.getOwnPropertyDescriptor(el.constructor.prototype, 'value').set.call(el, value)
   el.dispatchEvent(new Event('input', { bubbles: true }))
 }
-const button = (host, text) => [...host.querySelectorAll('button')].find(b => b.textContent.trim() === text)
+// The date and length are chips under the title now, named by their aria-label (v1.4.6).
+const button = (host, text) => [...host.querySelectorAll('button')].find(b => b.textContent.trim() === text || b.getAttribute('aria-label') === text)
 const unmountAll = () => act(() => { mounted.splice(0).forEach(r => r.unmount()) })
 
 const entry = (id, w) => ({ id, sets: [{ w, r: 5, done: true }] })

@@ -61,11 +61,52 @@ final class HealthRead {
         return out;
     }
 
+    /** One body-composition reading as JS gets it: `type` is the measurement key openGym files it under. */
+    static final class Body {
+        final String type;
+        final long t;
+        final double value;
+        final String id, origin, clientId;
+
+        Body(String type, long t, double value, String id, String origin, String clientId) {
+            this.type = type; this.t = t; this.value = value; this.id = id; this.origin = origin; this.clientId = clientId;
+        }
+    }
+
+    /** A reading of `type` (bodyFat in percent, the masses in kg), or null when it is no reading. */
+    static Body body(String type, long t, double value, Metadata m) {
+        if (!(value > 0) || Double.isInfinite(value)) return null;
+        if ("bodyFat".equals(type) && value > 100) return null;
+        return new Body(type, t, value, m.getId(), m.getDataOrigin().getPackageName(), m.getClientRecordId());
+    }
+
+    /** One local day's totals as JS gets them; a metric that had no data stays null. */
+    static final class Day {
+        final String d;
+        Double kcal, protein, fat, carbs, water;
+
+        Day(String d) { this.d = d; }
+
+        boolean empty() { return kcal == null && protein == null && fat == null && carbs == null && water == null; }
+    }
+
+    /** A total worth handing on: rounded to one decimal, and null for nothing or nonsense. */
+    static Double total(Double v) {
+        if (v == null || !(v > 0) || v.isInfinite()) return null;
+        return Math.round(v * 10) / 10.0;
+    }
+
     /** The JS names of the read permissions, as the manifest declares them. */
     static String readPermission(String name) {
         switch (name) {
             case "heartRate": return "android.permission.health.READ_HEART_RATE";
             case "weight": return "android.permission.health.READ_WEIGHT";
+            case "bodyFat": return "android.permission.health.READ_BODY_FAT";
+            case "leanMass": return "android.permission.health.READ_LEAN_BODY_MASS";
+            case "boneMass": return "android.permission.health.READ_BONE_MASS";
+            case "bodyWater": return "android.permission.health.READ_BODY_WATER_MASS";
+            case "nutrition": return "android.permission.health.READ_NUTRITION";
+            case "hydration": return "android.permission.health.READ_HYDRATION";
             // Not a data type: data older than 30 days before the first grant (#801).
             case "history": return "android.permission.health.READ_HEALTH_DATA_HISTORY";
             default: return null;

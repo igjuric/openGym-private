@@ -17,8 +17,16 @@
 // the workouts of the last day and the weigh-ins since the last read (30 days the first time), so
 // no background or history permission is asked for. What it decides is in lib/health-read.js.
 //
+// Since v1.4.6, on Android, three more reads, each its own switch: body composition (body fat,
+// lean, bone and water mass, into the day's measurement check-in), and the day's nutrition and
+// water (into S.nutrition). They fill the same fields the user types into, never a copy of them,
+// and a typed value always wins (lib/health-read.js mergeBodyComposition, lib/nutrition.js).
+//
 // The web build never gets here (MOBILE is a build-time flag).
-import { mergeHeartRate, mergeWeighIns, lacksHeartRate } from './health-read.js'
+import { mergeHeartRate, mergeWeighIns, lacksHeartRate, mergeBodyComposition } from './health-read.js'
+import { mergeNutritionDays, normalizeNutritionState, FOOD_KEYS } from './nutrition.js'
+import { normalizeMeasurementsState } from './measurements.js'
+import { isoOf } from './format.js'
 import { MOBILE, nativePlatform, readJsonFile, writeJsonFile } from './mobile.js'
 import { healthRecords, planSync, writtenIds, goneIds } from './health-connect.js'
 import { exerciseNameFor } from './i18n-core.js'
@@ -26,7 +34,19 @@ import { EXIDX } from './exercises.js'
 import { speedUnitOf } from './speed.js'
 
 export const HEALTH_FILE = 'opengym-health.json'
-const OFF = { on: false, written: {}, at: 0, error: null, readHr: false, readWeight: false, wHistory: false, wCursor: 0, seen: {}, hrTried: {}, readError: null }
+const OFF = {
+  on: false, written: {}, at: 0, error: null, readHr: false, readWeight: false, wHistory: false, wCursor: 0, seen: {}, hrTried: {}, readError: null,
+  // v1.4.6: body composition (bCursor, bSeen as for weigh-ins), nutrition and water (nSeen: the
+  // day totals last taken, lib/nutrition.js mergeNutritionDays), and when each last read.
+  readBody: false, bHistory: false, bCursor: 0, bSeen: {}, readNutrition: false, readWater: false, nSeen: {}, nRead: 0, readAt: 0,
+}
+// The switches, by the name Settings uses, and the field in the file each one is.
+export const READ_KINDS = { hr: 'readHr', weight: 'readWeight', body: 'readBody', nutrition: 'readNutrition', water: 'readWater' }
+// The reads only the Android plugin has; Apple Health's are a follow-up.
+export const ANDROID_ONLY_READS = ['body', 'nutrition', 'water']
+// What each switch asks Health Connect for (HealthRead.readPermission names).
+const READ_PERMS = { hr: ['heartRate'], weight: ['weight'], body: ['bodyFat', 'leanMass', 'boneMass', 'bodyWater'], nutrition: ['nutrition'], water: ['hydration'] }
+const anyRead = h => !!h && Object.values(READ_KINDS).some(k => h[k])
 
 // Wrapped in an object, as in rest-alert.js: a Capacitor plugin proxy answers `then`, so a
 // promise resolved with the bare proxy never settles.
@@ -51,7 +71,9 @@ export async function loadHealth() {
   if (cached) return cached
   const f = await readJsonFile(HEALTH_FILE)
   const map = v => (v && typeof v === 'object' && !Array.isArray(v) ? v : {})
-  cached = f && typeof f === 'object' ? { ...OFF, ...f, written: map(f.written), seen: map(f.seen), hrTried: map(f.hrTried) } : { ...OFF }
+  cached = f && typeof f === 'object'
+    ? { ...OFF, ...f, written: map(f.written), seen: map(f.seen), hrTried: map(f.hrTried), bSeen: map(f.bSeen), nSeen: map(f.nSeen) }
+    : { ...OFF }
   return cached
 }
 const saveHealth = h => { cached = h; return writeJsonFile(HEALTH_FILE, h) }
@@ -233,6 +255,9 @@ export const WEIGHT_FIRST_MS = 30 * 24 * 3600e3
 export const WEIGHT_HISTORY_MS = 365 * 24 * 3600e3
 const WEIGHT_MARGIN_MS = 2 * 24 * 3600e3
 const SEEN_KEEP_MS = 60 * 24 * 3600e3
+// The days of nutrition and water each read covers: the first time, then every time after.
+export const NUTRITION_FIRST_DAYS = 30
+export const NUTRITION_AGAIN_DAYS = 7
 
 const srcOf = platform => (platform === 'ios' ? 'ah' : 'hc')
 
@@ -243,25 +268,33 @@ let readRunning = null
 let lastWeightRead = 0
 
 /**
- * Turns one of the two reads on (`kind`: 'hr' | 'weight'): asks for that read permission only,
- * then reads once. Resolves with { ok, reason }; reason 'denied' when it was not granted.
+ * Turns one read on (`kind`: one of READ_KINDS): asks for that read's permissions only, then reads
+ * once. Resolves with { ok, reason }; reason 'denied' when none was granted. Body composition is
+ * four permissions; granting any of them is enough, the others simply read nothing.
  */
 export async function enableRead(kind, getState, { apply = null } = {}) {
+  if (!READ_KINDS[kind]) return { ok: false, reason: 'unsupported' }
   const p = await plugin()
   if (!p) return { ok: false, reason: 'unsupported' }
+  if (p.platform === 'ios' && ANDROID_ONLY_READS.includes(kind)) return { ok: false, reason: 'unsupported' }
   const st = await p.HC.status().catch(() => ({ status: 'unsupported' }))
   if (st.status !== 'available') return { ok: false, reason: st.status }
-  const perm = kind === 'hr' ? 'heartRate' : 'weight'
+  const perms = READ_PERMS[kind]
   // The history permission only where Health Connect has it (status says so); Apple Health has none.
-  const history = kind === 'weight' && p.platform !== 'ios' && st.history === true
-  const res = await p.HC.requestPermissions({ read: history ? [perm, 'history'] : [perm], write: [] }).catch(() => null)
+  const history = (kind === 'weight' || kind === 'body') && p.platform !== 'ios' && st.history === true
+  const res = await p.HC.requestPermissions({ read: history ? [...perms, 'history'] : perms, write: [] }).catch(() => null)
   // Apple Health never says whether reading was allowed (that it was refused is itself private):
   // `read` is then missing, and a refusal just reads nothing.
-  const ok = res && (res.read ? res.read[perm] !== false : true)
+  const ok = res && (res.read ? perms.some(perm => res.read[perm] === true || (res.read[perm] !== false && perms.length === 1)) : true)
   if (!ok) return { ok: false, reason: 'denied' }
   const h = await loadHealth()
-  const out = { ...h, [kind === 'hr' ? 'readHr' : 'readWeight']: true, readError: null }
+  const out = { ...h, [READ_KINDS[kind]]: true, readError: null }
   if (kind === 'weight') out.wHistory = history && res.read?.history === true
+  if (kind === 'body') out.bHistory = history && res.read?.history === true
+  // Read at once, whatever the last read of the others was; a new nutrition or water switch
+  // takes the first read's 30 days (what was taken before is in the memo, so nothing doubles).
+  if (ANDROID_ONLY_READS.includes(kind)) out.readAt = 0
+  if (kind === 'nutrition' || kind === 'water') out.nRead = 0
   await saveHealth(out)
   told(out)
   if (getState) await readHealth(getState, { force: true, apply }).catch(() => {})
@@ -270,10 +303,12 @@ export async function enableRead(kind, getState, { apply = null } = {}) {
 
 /** Turns a read off. What it already brought in stays in the log, as the user's data. */
 export async function disableRead(kind) {
+  if (!READ_KINDS[kind]) return loadHealth()
   if (readRunning) await readRunning.catch(() => {})
   const h = await loadHealth()
-  const out = kind === 'hr' ? { ...h, readHr: false, hrTried: {} } : { ...h, readWeight: false }
-  if (!out.readHr && !out.readWeight) out.readError = null
+  const out = { ...h, [READ_KINDS[kind]]: false }
+  if (kind === 'hr') out.hrTried = {}
+  if (!anyRead(out)) out.readError = null
   await saveHealth(out)
   told(out)
   return out
@@ -286,7 +321,7 @@ export async function disableRead(kind) {
  * `force`). The log changes only when something new came in.
  */
 export function readHealth(getState, { force = false, now = Date.now(), apply = null } = {}) {
-  if (!MOBILE || !cached || !(cached.readHr || cached.readWeight)) return Promise.resolve(cached)
+  if (!MOBILE || !cached || !anyRead(cached)) return Promise.resolve(cached)
   if (readRunning) return readRunning
   readRunning = readOnce(getState, force, now, apply || applyRef).finally(() => { readRunning = null })
   return readRunning
@@ -351,6 +386,60 @@ async function readOnce(getState, force, now, applyFn) {
       const newest = records.reduce((m, r) => Math.max(m, Number(r?.t) || 0), 0)
       if (newest > h.wCursor) h.wCursor = newest
     } catch (e) { fail(e) }
+  }
+
+  // v1.4.6, Android: body composition, nutrition and water, on the weigh-ins' schedule.
+  const due = force ? now - (h.readAt || 0) >= RESUME_EVERY_MS : now - (h.readAt || 0) >= READ_EVERY_MS
+  if (p.platform !== 'ios' && due && (h.readBody || h.readNutrition || h.readWater)) {
+    h.readAt = now
+    if (h.readBody) {
+      const sinceFor = back => (h.bCursor > 0 ? Math.max(h.bCursor - WEIGHT_MARGIN_MS, now - back) : now - back)
+      try {
+        let res
+        try {
+          res = await p.HC.readBody({ since: sinceFor(h.bHistory ? WEIGHT_HISTORY_MS : WEIGHT_FIRST_MS) })
+        } catch (e) {
+          if (!(h.bHistory && e?.code === 'permission')) throw e
+          h.bHistory = false
+          res = await p.HC.readBody({ since: sinceFor(WEIGHT_FIRST_MS) })
+        }
+        const records = Array.isArray(res?.records) ? res.records : []
+        const seen = { ...(h.bSeen || {}) }
+        const before = { ...seen }
+        if (records.length) apply(probe => mergeBodyComposition(probe, records, { src, seen, now }).length > 0,
+          s => { mergeBodyComposition(s, records, { src, seen: { ...before }, now }); normalizeMeasurementsState(s) })
+        for (const [k, v] of Object.entries(seen)) if (now - Number(v?.t) > SEEN_KEEP_MS) delete seen[k]
+        h.bSeen = seen
+        const newest = records.reduce((m, r) => Math.max(m, Number(r?.t) || 0), 0)
+        if (newest > h.bCursor) h.bCursor = newest
+      } catch (e) { fail(e) }
+    }
+    if (h.readNutrition || h.readWater) {
+      // The first read takes the last 30 days, later ones the last week: a meal is often logged
+      // the next morning, and a food app may correct a day after that.
+      const back = h.nRead > 0 ? NUTRITION_AGAIN_DAYS : NUTRITION_FIRST_DAYS
+      const from = isoOf(new Date(now - (back - 1) * 86400000)), to = isoOf(new Date(now))
+      try {
+        const res = await p.HC.readNutrition({ from, to, nutrition: !!h.readNutrition, water: !!h.readWater })
+        const days = Array.isArray(res?.days) ? res.days : []
+        // Only what the read covered: a permission taken back leaves those fields as they are.
+        const fields = [...(res?.nutrition ? FOOD_KEYS : []), ...(res?.water ? ['water'] : [])]
+        // A day in the window the hub had nothing for at all: its imported totals are cleared too.
+        const all = []
+        for (let x = new Date(from + 'T12:00:00'); isoOf(x) <= to; x = new Date(x.getTime() + 86400000)) {
+          const d = isoOf(x)
+          all.push(days.find(r => r?.d === d) || { d })
+        }
+        const seen = { ...(h.nSeen || {}) }
+        const before = JSON.parse(JSON.stringify(seen))
+        if (fields.length) apply(probe => mergeNutritionDays(probe, all, { src, fields, seen, now }).length > 0,
+          s => { mergeNutritionDays(s, all, { src, fields, seen: JSON.parse(JSON.stringify(before)), now }); normalizeNutritionState(s) })
+        const keep = isoOf(new Date(now - SEEN_KEEP_MS))
+        for (const d of Object.keys(seen)) if (d < keep) delete seen[d]
+        h.nSeen = seen
+        h.nRead = now
+      } catch (e) { fail(e) }
+    }
   }
 
   h.readError = error

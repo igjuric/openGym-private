@@ -10,6 +10,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true
 // can be installed, off until switched on, and turning it off asks what happens to what was
 // already written. lib/health-sync.js is mocked; its own tests cover the writing.
 const mocks = vi.hoisted(() => {
+  const READ = { hr: 'readHr', weight: 'readWeight', body: 'readBody', nutrition: 'readNutrition', water: 'readWater' }
   const state = { S: null, MOBILE: true, android: true, status: { status: 'available', granted: false }, health: { on: false, written: {}, error: null } }
   state.snapshot = () => ({
     S: state.S, user: null, update: vi.fn(),
@@ -22,10 +23,10 @@ const mocks = vi.hoisted(() => {
   state.readGrant = true
   state.enableRead = vi.fn(async kind => {
     if (!state.readGrant) return { ok: false, reason: 'denied' }
-    state.health = { ...state.health, [kind === 'hr' ? 'readHr' : 'readWeight']: true }
+    state.health = { ...state.health, [READ[kind]]: true }
     return { ok: true, health: state.health }
   })
-  state.disableRead = vi.fn(async kind => { state.health = { ...state.health, [kind === 'hr' ? 'readHr' : 'readWeight']: false }; return state.health })
+  state.disableRead = vi.fn(async kind => { state.health = { ...state.health, [READ[kind]]: false }; return state.health })
   state.menuSheet = vi.fn()
   state.toast = vi.fn()
   return state
@@ -88,7 +89,7 @@ afterEach(() => {
 })
 
 const mount = async () => {
-  await act(async () => { root.render(<Settings page="data" />) })
+  await act(async () => { root.render(<Settings page="health" />) })
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
 }
 const row = text => [...host.querySelectorAll('.lrow')].find(r => r.textContent.includes(text))
@@ -219,5 +220,36 @@ describe('Settings — reading back', () => {
     await act(async () => { sw('Weigh-ins from other apps').click() })
     expect(mocks.disableRead).toHaveBeenCalledWith('weight')
     expect(mocks.menuSheet).not.toHaveBeenCalled()
+  })
+})
+
+// v1.4.6: body composition, nutrition and water, on the Health & integrations page.
+describe('Settings — Health & integrations', () => {
+  const sw = text => row(text)?.querySelector('[role="switch"]')
+  it('has a switch each for body composition, calories and water, off by default', async () => {
+    await mount()
+    for (const title of ['Body composition from other apps', 'Calories and macros from other apps', 'Water from other apps']) {
+      expect(sw(title).getAttribute('aria-checked')).toBe('false')
+    }
+    await act(async () => { sw('Calories and macros from other apps').click() })
+    expect(mocks.enableRead).toHaveBeenCalledWith('nutrition', expect.any(Function))
+    expect(sw('Calories and macros from other apps').getAttribute('aria-checked')).toBe('true')
+    expect(host.textContent).toContain('a meal two apps both saved counts once')
+    await act(async () => { sw('Water from other apps').click() })
+    expect(mocks.enableRead).toHaveBeenCalledWith('water', expect.any(Function))
+  })
+
+  it('leads to the screens the data lands in', async () => {
+    await mount()
+    expect(row('Body measurements')).toBeTruthy()
+    expect(row('Nutrition')).toBeTruthy()
+  })
+
+  it('offers the Android reads only on Android', async () => {
+    mocks.status = { status: 'available', granted: false, platform: 'ios' }
+    mocks.android = false
+    await mount()
+    expect(row('Body composition from other apps')).toBeUndefined()
+    expect(row('Heart rate from your watch')).toBeTruthy()
   })
 })

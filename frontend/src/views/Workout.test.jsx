@@ -2134,16 +2134,16 @@ describe('workout list view', () => {
     expect(focusButton(units()[0])).toBeTruthy()
   })
 
-  it('goes back to cards on Set current when the list was only opened for this session (#260)', async () => {
+  it('keeps the list on Set current when the list was only opened for this session (v1.4.6, was #260)', async () => {
     await mount([exercise('plain-bench', [false]), exercise('plain-row', [false])], 0, {
       workoutView: 'cards', active: { workoutView: 'list' },
     })
 
     await act(async () => { focusButton(units()[1]).dispatchEvent(new dom.Event('click', { bubbles: true })) })
-    // Picking the exercise to look at next is all the tap is for, and cards are where one
-    // exercise is front and centre, so it does not take a second trip through the ⋮ menu.
+    // The tap only moves the mark: the layout chosen in the ⋮ menu for this workout stays. It
+    // used to jump back to cards here, undoing a choice behind a button that never said so.
     expect(mocks.S.active.cur).toBe(1)
-    expect(mocks.S.active.workoutView).toBe('cards')
+    expect(mocks.S.active.workoutView).toBe('list')
   })
 
   it('stays in the list on Set current when the exercise buttons act on the current exercise', async () => {
@@ -2421,6 +2421,28 @@ describe('workout view header menu', () => {
     await act(async () => { item(menu, 'Layout').onClick() })
     return mocks.menuSheet.mock.calls.at(-1)[0]
   }
+
+  it('says a layout picked for this workout is only for it, and makes it the default in one tap', async () => {
+    await mount([exercise('plain-bench', [false])], 0, { workoutView: 'cards' })
+    const layouts = await openLayout(await openMenu())
+    await act(async () => { item(layouts, 'List').onClick() })
+    expect(mocks.S.active.workoutView).toBe('list')
+    expect(mocks.S.workoutView).toBe('cards')
+    const [msg, opts] = mocks.toast.mock.calls.at(-1)
+    expect(msg).toBe('List for this workout')
+    expect(opts.action).toBe('Make default')
+    await act(async () => { opts.onAction() })
+    expect(mocks.S.workoutView).toBe('list')
+    expect(mocks.toast).toHaveBeenLastCalledWith('List is now your default layout')
+  })
+
+  it('says nothing when the layout picked is already the default, or is Focus', async () => {
+    await mount([exercise('plain-bench', [false])], 0, { workoutView: 'list', active: { workoutView: 'cards' } })
+    await act(async () => { item(await openLayout(await openMenu()), 'List').onClick() })
+    await act(async () => { item(await openLayout(await openMenu()), 'Focus').onClick() })
+    expect(mocks.S.active.workoutView).toBe('focus')
+    expect(mocks.toast).not.toHaveBeenCalled()
+  })
 
   it('groups Workout settings, Add and This workout with no Discard (#751), then a Layout sheet with the four layouts marked current', async () => {
     await mount([exercise('plain-bench', [false])], 0, { active: { workoutView: 'list', routineIds: [] } })

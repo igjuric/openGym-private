@@ -24,6 +24,13 @@ function mountTopSheet() {
   return host
 }
 const button = (host, text) => [...host.querySelectorAll('button')].find(b => b.textContent.trim() === text)
+// Copy, image, PDF and .fit live in the Share and export menu since v1.4.6: open it, pick one.
+const shareAction = (host, label) => {
+  const row = [...host.querySelectorAll('button')].find(b => b.querySelector('.lrow-t')?.textContent === 'Share and export')
+  act(() => row.click())
+  const menu = mountTopSheet()
+  return [...menu.querySelectorAll('[role="button"]')].find(el => el.querySelector('.tt')?.textContent === label)
+}
 
 const workout = (entries, extra = {}) => ({
   id: 'w1', d: '2026-09-15', start: new Date(2026, 8, 15, 17).getTime(), end: new Date(2026, 8, 15, 18).getTime(), name: 'Push',
@@ -111,7 +118,8 @@ describe('workout detail', () => {
       Object.getOwnPropertyDescriptor(note.constructor.prototype, 'value').set.call(note, 'Good day')
       note.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    await act(async () => { button(host, 'Copy as text').click() })
+    const item = shareAction(host, 'Copy as text')
+    await act(async () => { item.click() })
     expect(writeText).toHaveBeenCalledTimes(1)
     const text = writeText.mock.calls[0][0]
     expect(text.split('\n')[0]).toMatch(/^Push · /)
@@ -136,7 +144,8 @@ describe('workout detail', () => {
     const host = mountTopSheet()
     expect(host.querySelector('.wd-ss')).toBeNull()
     expect(host.querySelectorAll('.wd-ex')).toHaveLength(3)
-    await act(async () => { button(host, 'Copy as text').click() })
+    const item = shareAction(host, 'Copy as text')
+    await act(async () => { item.click() })
     expect(writeText.mock.calls[0][0]).not.toContain('Superset')
   })
 
@@ -145,7 +154,8 @@ describe('workout detail', () => {
     document.execCommand = () => false
     workoutDetailSheet(workout([{ id: lifts[0], target: { mode: 'reps' }, sets: [done(60, 5)] }]))
     const host = mountTopSheet()
-    await act(async () => { button(host, 'Copy as text').click() })
+    const item = shareAction(host, 'Copy as text')
+    await act(async () => { item.click() })
     expect(toast).toHaveBeenCalledWith('Could not copy')
     delete document.execCommand
   })
@@ -163,7 +173,8 @@ describe('export as .fit', () => {
     useStore.setState(s => ({ S: { ...s.S, workouts: [w] } }))
     workoutDetailSheet(w)
     const host = mountTopSheet()
-    await act(async () => { button(host, 'Export as .fit file').click() })
+    const item = shareAction(host, 'Export as .fit file')
+    await act(async () => { item.click() })
     expect(clicked).toHaveLength(1)
     expect(clicked[0]).toMatch(/^opengym-2026-09-15-\d{4}\.fit$/)
     const bytes = new Uint8Array(await blobs[0].arrayBuffer())
@@ -175,7 +186,29 @@ describe('export as .fit', () => {
   it('says so when the workout cannot be written', async () => {
     workoutDetailSheet({ id: 'x', name: 'Nowhen', entries: [], prs: [] })
     const host = mountTopSheet()
-    await act(async () => { button(host, 'Export as .fit file').click() })
+    const item = shareAction(host, 'Export as .fit file')
+    await act(async () => { item.click() })
     expect(toast).toHaveBeenCalledWith('Could not create the file')
+  })
+})
+
+// v1.4.6: ten stacked buttons became chips, two main actions, a short list and a quiet delete.
+describe('the actions at the bottom', () => {
+  it('puts date and length on chips, Edit and Repeat side by side, and the exports in one menu', () => {
+    const w = workout([{ id: lifts[0], target: { mode: 'reps' }, sets: [done(80, 5)] }])
+    useStore.setState(s => ({ S: { ...s.S, workouts: [w] } }))
+    workoutDetailSheet(w)
+    const host = mountTopSheet()
+    const chips = [...host.querySelectorAll('.wd-chip')].map(c => c.getAttribute('aria-label'))
+    expect(chips).toEqual(['Change date & time', 'Change duration'])
+    expect(host.querySelector('.wd-chip:nth-child(2)').textContent).toBe('1h 0m')
+    expect([...host.querySelectorAll('.wd-main .btn')].map(b => b.textContent.trim())).toEqual(['Edit workout', 'Repeat today'])
+    expect([...host.querySelectorAll('.wd-more .lrow-t')].map(e => e.textContent)).toEqual(['Save as routine', 'Share and export'])
+    for (const gone of ['Copy as text', 'Share as image', 'Save as PDF', 'Export as .fit file']) expect(button(host, gone)).toBeUndefined()
+    expect(button(host, 'Delete workout').className).toContain('ghost')
+    const row = [...host.querySelectorAll('button')].find(b => b.querySelector('.lrow-t')?.textContent === 'Share and export')
+    act(() => row.click())
+    const menu = mountTopSheet()
+    expect([...menu.querySelectorAll('.tt')].map(e => e.textContent)).toEqual(['Copy as text', 'Share as image', 'Save as PDF', 'Export as .fit file'])
   })
 })

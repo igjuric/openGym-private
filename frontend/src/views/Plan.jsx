@@ -295,17 +295,31 @@ function Schedule({ S, update, nav, mode }) {
     : { done: t('Done'), next: t('Up next'), later: t('Later') }[item.state]
   const editing = editLoop && !external
 
+  // The choice between the two, each explained, in a sheet of its own (v1.4.6). As a segmented
+  // control under the Schedule | Routines tabs it looked like a second tab bar, and a choice that
+  // stops a running loop is not a quick view switch.
+  const MODE_SUB = {
+    week: t('The same routines on the same weekdays, every week.'),
+    rotation: t('Routines in a loop. Whatever is next stays next until you train it, whatever the day.'),
+  }
+  // The row says it in a few words; the picker explains each in full.
+  const MODE_SHORT = { week: t('Same routines on the same weekdays'), rotation: t('Next up stays next, any day') }
+  const pickMode = () => menuSheet({
+    title: t('How do you want to schedule?'),
+    items: [
+      { icon: 'calendar', label: t('Fixed Week'), sub: MODE_SUB.week, on: mode === 'week', onClick: () => setMode('week') },
+      { icon: 'repeat', label: t('Rotation'), sub: MODE_SUB.rotation, on: mode === 'rotation', onClick: () => setMode('rotation') },
+    ],
+  })
+
   return <>
-    <Section className="plan-mode" footer={mode === 'rotation'
-      ? t('Routines in a loop. Whatever is next stays next until you train it, whatever the day.')
-      : t('The same routines on the same weekdays, every week.')}>
-      <Row icon="repeat" iconTint="var(--orange)" title={t('How you train')}>
-        {/* A planner's own queue is not this app's to switch off: text, not a control. */}
-        {external
-          ? <span className="small dim plan-mode-locked">{t('Rotation')} · {t('Externally managed')}</span>
-          : <Segmented className="seg-inline" value={mode} onChange={setMode}
-              options={[{ value: 'week', label: t('Fixed Week') }, { value: 'rotation', label: t('Rotation') }]} />}
-      </Row>
+    <Section className="plan-mode">
+      {/* A planner's own queue is not this app's to switch off: shown, not offered. */}
+      {external
+        ? <Row icon="repeat" iconTint="var(--orange)" title={t('Rotation')} subtitle={t('Externally managed')} />
+        : <Row icon={mode === 'rotation' ? 'repeat' : 'calendar'} iconTint="var(--orange)"
+            title={mode === 'rotation' ? t('Rotation') : t('Fixed Week')} subtitle={MODE_SHORT[mode]}
+            value={t('Change')} accessory="chevron" onClick={pickMode} />}
       {/* The training block shapes the same routines week by week (lib/blocks.js), so it sits
           with the other choice about how you train. Only once there is a plan to shape. */}
       {S.routines.length > 0 && <BlockRow S={S} />}
@@ -398,10 +412,14 @@ function Schedule({ S, update, nav, mode }) {
     </div>}
 
     {/* Weekly muscle volume is analysis: it moved to Stats, next to Muscle balance. Stats only
-        shows that card once there is a routine, so the link waits for one too. */}
-    {S.routines.length > 0 && <Section className="plan-link">
+        shows that card once there is a routine, so the link waits for one too. A notice of a
+        move, so once followed it is gone for good (hints sync, so on every device). */}
+    {S.routines.length > 0 && !S.hints?.volumeMoved && <Section className="plan-link">
       <Row icon="chart" iconTint="var(--indigo)" title={t('Weekly muscle volume')} subtitle={t('Now in Stats, next to Muscle balance')}
-        accessory="chevron" onClick={() => nav('/stats?focus=weekly-volume')} />
+        accessory="chevron" onClick={() => {
+          update(s => { s.hints = { ...(s.hints || {}), volumeMoved: true } })
+          nav('/stats?focus=weekly-volume')
+        }} />
     </Section>}
   </>
 }

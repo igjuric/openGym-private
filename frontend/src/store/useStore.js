@@ -99,6 +99,10 @@ export const DEF = {
   // Body measurements (#82, #699): one check-in per day; canonical cm, kg or % according to
   // the field's unit (lib/measurements.js); merged like weigh-ins (lib/sync-merge.js).
   measurements: [], measurementEnabled: null, customMeasurements: [],
+  // What you ate and drank (v1.4.6): one entry per day, kcal, grams and ml, typed in or filled
+  // from the phone's health hub (lib/nutrition.js); merged per field (lib/sync-merge.js). Daily
+  // goals in nutritionTargets ({ kcal, protein, fat, carbs, water }) or null.
+  nutrition: [], nutritionTargets: null,
   queue: null,   // a planner's floating week (lib/queue.js) — via the API, or by this rotation feature (below)
   // The in-app rotation's reusable definition — { id, sequence, label } (lib/rotation.js). Never
   // a live queue: it only ever feeds `queue`, and `queue.rotationId` says the pass is managed here.
@@ -201,6 +205,8 @@ export const DEF = {
   // entries, Stats, imports and the separate pre-workout weigh-in flow keep working.
   // Defaults on; an older profile without the key reads as on (`!== false`).
   showWeightCard: true,
+  // Home's Today's nutrition card (v1.4.6), shown once nutrition is in use (lib/nutrition.js).
+  showNutritionCard: true,
   // Whether Start opens the quick weigh-in first (sheets.jsx startFlow, issue #137). Off starts
   // the session straight away; weight can still be logged from Home/Stats. On here, so an
   // older profile without the key reads as on (`!== false`) and keeps the step it had; a profile

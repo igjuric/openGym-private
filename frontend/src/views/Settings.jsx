@@ -864,6 +864,10 @@ export default function Settings({ page = null, find = null, via = null, entryKe
           subtitle={t('Show the body weight card on Home.')}>
           <Switch checked={S.showWeightCard !== false} onChange={v => update(s => { s.showWeightCard = v })} />
         </Row>
+        <Row icon="flame" iconTint="var(--orange)" title={t('Nutrition')}
+          subtitle={t('Show today’s nutrition on Home, once you log food or water or set a goal.')}>
+          <Switch checked={S.showNutritionCard !== false} onChange={v => update(s => { s.showNutritionCard = v })} />
+        </Row>
         {/* The bar at the top that says the app is offline, kept local, or not synced (#369, #330).
             Here and not under Server & sync, which a phone kept local never shows. Switching it on
             also brings back the no-server line its × hid (#454). */}
@@ -907,6 +911,20 @@ export default function Settings({ page = null, find = null, via = null, entryKe
       </Section>}
     </>,
 
+    // Phone app only (v1.4.6): what goes to the phone's health hub and what comes back from it.
+    // What comes back fills the same screens you type into, never a copy of them.
+    health: () => <>
+      {MOBILE && <HealthConnectCard S={S} toast={toast} android={android} />}
+      <Section title={t('Where it shows')} footer={t('A value you type in yourself always wins over one from another app.')}>
+        <Row icon="ruler" iconTint="var(--teal)" title={t('Body measurements')}
+          subtitle={t('Body fat, lean mass, bone mass and body water, with your circumferences.')}
+          accessory="chevron" onClick={() => nav('/measurements')} />
+        <Row icon="flame" iconTint="var(--orange)" title={t('Nutrition')}
+          subtitle={t('Calories, protein, fat, carbs and water for each day.')}
+          accessory="chevron" onClick={() => nav('/nutrition')} />
+      </Section>
+    </>,
+
     data: () => <>
       <Section title={t('Back up')}>
         <Row icon="share" iconTint="var(--blue)" title={t('Export backup (JSON)')} subtitle={hasMedia ? t('Without photos and videos') : undefined} accessory="chevron" onClick={doExport} />
@@ -923,7 +941,6 @@ export default function Settings({ page = null, find = null, via = null, entryKe
         {/* Android only: the system folder picker (#161). iOS shows Documents in Files already. */}
         {MOBILE && android && S.autoBackup && <BackupFolderRow />}
       </Section>
-      {MOBILE && <HealthConnectCard S={S} toast={toast} android={android} />}
       <Section title={t('Bring data in')}>
         <Row icon="download" iconTint="var(--teal)" title={t('Import backup')} accessory="chevron" onClick={() => fileRef.current.click()} />
         <Row icon="download" iconTint="var(--teal)" title={t('Import from another app')}
@@ -1689,7 +1706,10 @@ function HealthConnectCard({ S, toast, android }) {
     } catch { toast(c.failed) }
     setBusy(false)
   }
-  const reading = h.readHr || h.readWeight
+  const reading = h.readHr || h.readWeight || (!ios && (h.readBody || h.readNutrition || h.readWater))
+  // The first switch that is on, for the "allow again" row: asking again for that one asks
+  // Health Connect, which offers every permission the user took back.
+  const firstOn = ['hr', 'weight', 'body', 'nutrition', 'water'].find(k => h[{ hr: 'readHr', weight: 'readWeight', body: 'readBody', nutrition: 'readNutrition', water: 'readWater' }[k]])
 
   // Off can mean two things for what is already there, so it asks; closing the sheet keeps it on.
   const askOff = () => menuSheet({
@@ -1703,7 +1723,8 @@ function HealthConnectCard({ S, toast, android }) {
 
   return (
     <Section title={c.section}
-      footer={[h.on && c.footer, reading && (h.readWeight && h.wHistory ? t('openGym reads only while it is open: heart rate for workouts of the last day, weigh-ins of the last year. Older workouts stay as they are.') : t('openGym reads only while it is open: heart rate for workouts of the last day, weigh-ins of the last 30 days. Older workouts stay as they are.'))].filter(Boolean).join(' ') || null}>
+      footer={[h.on && c.footer, reading && (h.readWeight && h.wHistory ? t('openGym reads only while it is open: heart rate for workouts of the last day, weigh-ins of the last year. Older workouts stay as they are.') : t('openGym reads only while it is open: heart rate for workouts of the last day, weigh-ins of the last 30 days. Older workouts stay as they are.')),
+        !ios && (h.readNutrition || h.readWater) && t('Food and water are read as day totals, the way Health Connect adds them up, so a meal two apps both saved counts once.')].filter(Boolean).join(' ') || null}>
       <Row icon="heart" iconTint="var(--red)" title={c.write}
         subtitle={t('Finished workouts and weigh-ins, from this phone only.')}>
         <Switch checked={!!h.on} disabled={busy} onChange={v => (v ? turnOn() : askOff())} />
@@ -1718,9 +1739,25 @@ function HealthConnectCard({ S, toast, android }) {
         subtitle={t('Your smart scale’s weigh-ins land here. One you type in yourself always wins.')}>
         <Switch checked={!!h.readWeight} disabled={busy} onChange={toggleRead('weight')} />
       </Row>
+      {/* v1.4.6, Android: body composition, the day's food and the day's water, from any app that
+          saves them in Health Connect (a smart scale's, a food diary's, Google Health's). */}
+      {!ios && <>
+        <Row icon="ruler" iconTint="var(--teal)" title={t('Body composition from other apps')}
+          subtitle={t('Body fat, lean mass, bone mass and body water go into Body measurements.')}>
+          <Switch checked={!!h.readBody} disabled={busy} onChange={toggleRead('body')} />
+        </Row>
+        <Row icon="flame" iconTint="var(--orange)" title={t('Calories and macros from other apps')}
+          subtitle={t('Each day’s calories, protein, fat and carbs from your food app go into Nutrition.')}>
+          <Switch checked={!!h.readNutrition} disabled={busy} onChange={toggleRead('nutrition')} />
+        </Row>
+        <Row icon="flame" iconTint="var(--blue)" title={t('Water from other apps')}
+          subtitle={t('Each day’s water goes into Nutrition.')}>
+          <Switch checked={!!h.readWater} disabled={busy} onChange={toggleRead('water')} />
+        </Row>
+      </>}
       {reading && h.readError === 'permission' && <Row icon="warning" iconTint="var(--orange)"
         title={t('Permission withdrawn. Tap to allow again')} accessory="chevron"
-        onClick={() => toggleRead(h.readHr ? 'hr' : 'weight')(true)} />}
+        onClick={() => toggleRead(firstOn || 'weight')(true)} />}
       {(h.on || reading) && <Row icon="list" iconTint="var(--blue)" title={c.open}
         accessory="chevron" onClick={() => openHealthConnect().catch(() => {})} />}
     </Section>
