@@ -2723,4 +2723,14 @@ export default {
   "{0} for this workout": "Bu antrenman için {0}",
   "Make default": "Varsayılan yap",
   "{0} is now your default layout": "{0} artık varsayılan düzenin",
+  // --- plan schedule picker (v1.4.6) ---
+  "How do you want to schedule?": "Nasıl planlamak istersin?",
+  // --- plan schedule row (v1.4.6) ---
+  "Same routines on the same weekdays": "Aynı günlerde aynı rutinler",
+  "Next up stays next, any day": "Sıradaki sırada kalır, hangi gün olursa",
+  // --- Home nutrition card (v1.4.6) ---
+  "Today’s nutrition": "Bugünün beslenmesi",
+  "Water today: {0}": "Bugün su: {0}",
+  "Add {0} of water": "{0} su ekle",
+  "Show today’s nutrition on Home, once you log food or water or set a goal.": "Yemek veya su kaydettiğinde ya da hedef koyduğunda bugünün beslenmesini Ana sayfada göster.",
 }

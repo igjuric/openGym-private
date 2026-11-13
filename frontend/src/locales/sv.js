@@ -2770,4 +2770,14 @@ export default {
   "{0} for this workout": "{0} för det här passet",
   "Make default": "Gör till standard",
   "{0} is now your default layout": "{0} är nu din standardlayout",
+  // --- plan schedule picker (v1.4.6) ---
+  "How do you want to schedule?": "Hur vill du planera?",
+  // --- plan schedule row (v1.4.6) ---
+  "Same routines on the same weekdays": "Samma rutiner på samma veckodagar",
+  "Next up stays next, any day": "Nästa förblir nästa, vilken dag som helst",
+  // --- Home nutrition card (v1.4.6) ---
+  "Today’s nutrition": "Dagens kost",
+  "Water today: {0}": "Vatten i dag: {0}",
+  "Add {0} of water": "Lägg till {0} vatten",
+  "Show today’s nutrition on Home, once you log food or water or set a goal.": "Visa dagens kost på Hem när du loggar mat eller vatten eller sätter ett mål.",
 }

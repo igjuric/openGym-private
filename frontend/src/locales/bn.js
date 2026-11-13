@@ -2802,4 +2802,14 @@ export default {
   "{0} for this workout": "এই ওয়ার্কআউটের জন্য {0}",
   "Make default": "ডিফল্ট করুন",
   "{0} is now your default layout": "{0} এখন আপনার ডিফল্ট লেআউট",
+  // --- plan schedule picker (v1.4.6) ---
+  "How do you want to schedule?": "কীভাবে সময়সূচি সাজাতে চান?",
+  // --- plan schedule row (v1.4.6) ---
+  "Same routines on the same weekdays": "একই দিনে একই রুটিন",
+  "Next up stays next, any day": "পরেরটা পরেই থাকে, যেকোনো দিন",
+  // --- Home nutrition card (v1.4.6) ---
+  "Today’s nutrition": "আজকের পুষ্টি",
+  "Water today: {0}": "আজ পানি: {0}",
+  "Add {0} of water": "{0} পানি যোগ করুন",
+  "Show today’s nutrition on Home, once you log food or water or set a goal.": "খাবার বা পানি লগ করলে বা লক্ষ্য ঠিক করলে হোমে আজকের পুষ্টি দেখান।",
 }

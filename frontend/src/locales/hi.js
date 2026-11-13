@@ -2723,4 +2723,14 @@ export default {
   "{0} for this workout": "इस वर्कआउट के लिए {0}",
   "Make default": "डिफ़ॉल्ट बनाएँ",
   "{0} is now your default layout": "{0} अब आपका डिफ़ॉल्ट लेआउट है",
+  // --- plan schedule picker (v1.4.6) ---
+  "How do you want to schedule?": "आप शेड्यूल कैसे बनाना चाहते हैं?",
+  // --- plan schedule row (v1.4.6) ---
+  "Same routines on the same weekdays": "एक ही दिनों पर वही रूटीन",
+  "Next up stays next, any day": "अगला अगला ही रहता है, किसी भी दिन",
+  // --- Home nutrition card (v1.4.6) ---
+  "Today’s nutrition": "आज का पोषण",
+  "Water today: {0}": "आज पानी: {0}",
+  "Add {0} of water": "{0} पानी जोड़ें",
+  "Show today’s nutrition on Home, once you log food or water or set a goal.": "खाना या पानी दर्ज करने या लक्ष्य तय करने के बाद होम पर आज का पोषण दिखाएँ।",
 }

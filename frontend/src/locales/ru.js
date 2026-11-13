@@ -2727,4 +2727,14 @@ export default {
   "{0} for this workout": "{0} для этой тренировки",
   "Make default": "Сделать основным",
   "{0} is now your default layout": "Теперь {0}: основной вид",
+  // --- plan schedule picker (v1.4.6) ---
+  "How do you want to schedule?": "Как ты хочешь планировать?",
+  // --- plan schedule row (v1.4.6) ---
+  "Same routines on the same weekdays": "Те же программы в те же дни",
+  "Next up stays next, any day": "Следующая остаётся следующей, в любой день",
+  // --- Home nutrition card (v1.4.6) ---
+  "Today’s nutrition": "Питание сегодня",
+  "Water today: {0}": "Вода сегодня: {0}",
+  "Add {0} of water": "Добавить {0} воды",
+  "Show today’s nutrition on Home, once you log food or water or set a goal.": "Показывать питание за сегодня на главном экране, как только ты запишешь еду, воду или поставишь цель.",
 }

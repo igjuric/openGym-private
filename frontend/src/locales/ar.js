@@ -2778,4 +2778,14 @@ export default {
   "{0} for this workout": "{0} لهذا التمرين",
   "Make default": "اجعله الافتراضي",
   "{0} is now your default layout": "{0} هو الآن تخطيطك الافتراضي",
+  // --- plan schedule picker (v1.4.6) ---
+  "How do you want to schedule?": "كيف تريد تنظيم جدولك؟",
+  // --- plan schedule row (v1.4.6) ---
+  "Same routines on the same weekdays": "نفس التمارين في نفس أيام الأسبوع",
+  "Next up stays next, any day": "التالي يبقى التالي، في أي يوم",
+  // --- Home nutrition card (v1.4.6) ---
+  "Today’s nutrition": "تغذية اليوم",
+  "Water today: {0}": "الماء اليوم: {0}",
+  "Add {0} of water": "أضف {0} من الماء",
+  "Show today’s nutrition on Home, once you log food or water or set a goal.": "اعرض تغذية اليوم في الرئيسية بعد أن تسجّل طعامًا أو ماءً أو تحدّد هدفًا.",
 }

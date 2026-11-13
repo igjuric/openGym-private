@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   mergeNutritionDays, normalizeNutritionState, saveNutritionDay, nutritionSeries, nutritionAverage,
-  toNutritionDisplay, fromNutritionDisplay, nutritionUnit, isImportedNutrition, nutritionOn,
+  toNutritionDisplay, fromNutritionDisplay, nutritionUnit, isImportedNutrition, nutritionOn, addWater, nutritionInUse,
 } from './nutrition.js'
 
 const NOW = new Date('2026-11-12T18:00:00').getTime()
@@ -128,5 +128,29 @@ describe('display', () => {
     expect(nutritionSeries(S, 'water', 0, NOW)).toHaveLength(1)
     expect(nutritionAverage(S, 'kcal', 7, NOW)).toBe(2200)
     expect(nutritionAverage(S, 'fat', 7, NOW)).toBeNull()
+  })
+})
+
+describe('quick water from Home', () => {
+  it('adds a glass to the day, creating it when needed', () => {
+    const S = { nutrition: [] }
+    expect(addWater(S, '2026-11-12', 250, NOW)).toBe(250)
+    expect(addWater(S, '2026-11-12', 500, NOW + 1)).toBe(750)
+    expect(nutritionOn(S, '2026-11-12')).toMatchObject({ water: 750, t: NOW + 1 })
+  })
+
+  it('makes an imported day of water typed, so a later read keeps the glass', () => {
+    const S = { nutrition: [{ d: '2026-11-12', t: 1, kcal: 1800, water: 1000, src: { kcal: 'hc', water: 'hc' } }] }
+    addWater(S, '2026-11-12', 250, NOW)
+    expect(nutritionOn(S, '2026-11-12')).toMatchObject({ water: 1250, src: { kcal: 'hc' } })
+    mergeNutritionDays(S, [{ d: '2026-11-12', water: 1100 }], { src: 'hc', fields: ['water'], now: NOW + 5 })
+    expect(nutritionOn(S, '2026-11-12').water).toBe(1250)
+  })
+
+  it('knows when Home has anything to say about food', () => {
+    expect(nutritionInUse({ nutrition: [] }, NOW)).toBe(false)
+    expect(nutritionInUse({ nutrition: [], nutritionTargets: { kcal: 2400 } }, NOW)).toBe(true)
+    expect(nutritionInUse({ nutrition: [{ d: '2026-11-10', water: 500 }] }, NOW)).toBe(true)
+    expect(nutritionInUse({ nutrition: [{ d: '2026-10-01', water: 500 }] }, NOW)).toBe(false)
   })
 })

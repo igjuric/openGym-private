@@ -2720,4 +2720,14 @@ export default {
   "{0} for this workout": "{0} для цього тренування",
   "Make default": "Зробити основним",
   "{0} is now your default layout": "Тепер {0}: основний вигляд",
+  // --- plan schedule picker (v1.4.6) ---
+  "How do you want to schedule?": "Як ти хочеш планувати?",
+  // --- plan schedule row (v1.4.6) ---
+  "Same routines on the same weekdays": "Ті самі програми в ті самі дні",
+  "Next up stays next, any day": "Наступне лишається наступним, будь-якого дня",
+  // --- Home nutrition card (v1.4.6) ---
+  "Today’s nutrition": "Харчування сьогодні",
+  "Water today: {0}": "Вода сьогодні: {0}",
+  "Add {0} of water": "Додати {0} води",
+  "Show today’s nutrition on Home, once you log food or water or set a goal.": "Показувати харчування за сьогодні на головному екрані, щойно ти запишеш їжу, воду чи поставиш ціль.",
 }

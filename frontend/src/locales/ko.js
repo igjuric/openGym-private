@@ -2723,4 +2723,14 @@ export default {
   "{0} for this workout": "이번 운동만 {0}",
   "Make default": "기본값으로",
   "{0} is now your default layout": "이제 {0}이(가) 기본 레이아웃이에요",
+  // --- plan schedule picker (v1.4.6) ---
+  "How do you want to schedule?": "어떻게 일정을 짤까요?",
+  // --- plan schedule row (v1.4.6) ---
+  "Same routines on the same weekdays": "같은 요일에 같은 루틴",
+  "Next up stays next, any day": "다음 차례는 어느 날이든 그대로",
+  // --- Home nutrition card (v1.4.6) ---
+  "Today’s nutrition": "오늘의 영양",
+  "Water today: {0}": "오늘 물: {0}",
+  "Add {0} of water": "물 {0} 추가",
+  "Show today’s nutrition on Home, once you log food or water or set a goal.": "음식이나 물을 기록하거나 목표를 정하면 홈에 오늘의 영양을 보여 줘요.",
 }

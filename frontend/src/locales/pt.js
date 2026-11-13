@@ -2723,4 +2723,14 @@ export default {
   "{0} for this workout": "{0} para este treino",
   "Make default": "Usar sempre",
   "{0} is now your default layout": "{0} é agora o teu esquema predefinido",
+  // --- plan schedule picker (v1.4.6) ---
+  "How do you want to schedule?": "Como queres organizar o plano?",
+  // --- plan schedule row (v1.4.6) ---
+  "Same routines on the same weekdays": "As mesmas rotinas nos mesmos dias",
+  "Next up stays next, any day": "O próximo continua a ser o próximo, em qualquer dia",
+  // --- Home nutrition card (v1.4.6) ---
+  "Today’s nutrition": "Nutrição de hoje",
+  "Water today: {0}": "Água hoje: {0}",
+  "Add {0} of water": "Adicionar {0} de água",
+  "Show today’s nutrition on Home, once you log food or water or set a goal.": "Mostra a nutrição de hoje no Início assim que registares comida ou água ou definires um objetivo.",
 }

@@ -155,6 +155,33 @@ export function saveNutritionDay(S, d, values, { imported = {}, shown = {}, now 
   return entry
 }
 
+/**
+ * A glass of water from Home's quick buttons: `ml` more on day `d`, in `S` (mutated). The day's
+ * water becomes a typed value (what was there, imported or not, plus the glass), so a later read
+ * from the hub never takes the glass away; from then on that day's water is the user's to keep.
+ * Returns the day's water in ml.
+ */
+export function addWater(S, d, ml, now = Date.now()) {
+  if (!Array.isArray(S.nutrition)) S.nutrition = []
+  let e = nutritionOn(S, d)
+  if (!e) {
+    e = normalizeNutritionEntry({ d, t: now })
+    S.nutrition.push(e)
+    S.nutrition.sort((a, b) => (a.d < b.d ? -1 : 1))
+  }
+  e.water = nutritionValue('water', (Number(e.water) || 0) + ml) ?? e.water
+  if (isMap(e.src)) { delete e.src.water; if (!Object.keys(e.src).length) delete e.src }
+  e.t = Math.max(Number(e.t) || 0, now)
+  return e.water
+}
+
+/** Whether Home has anything to show about food: goals set, or a day logged in the last two weeks. */
+export function nutritionInUse(S, now = Date.now()) {
+  if (S?.nutritionTargets && Object.keys(S.nutritionTargets).length) return true
+  const since = isoOf(new Date(now - 13 * 86400000))
+  return (Array.isArray(S?.nutrition) ? S.nutrition : []).some(e => e && e.d >= since && nutritionHasValues(e))
+}
+
 /* ---------------------------------------------------------------- from the health hub -- */
 
 /**

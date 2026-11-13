@@ -2726,4 +2726,14 @@ export default {
   "{0} for this workout": "{0} erre az edzésre",
   "Make default": "Legyen alapértelmezett",
   "{0} is now your default layout": "Mostantól a(z) {0} az alapértelmezett elrendezésed",
+  // --- plan schedule picker (v1.4.6) ---
+  "How do you want to schedule?": "Hogyan szeretnéd beosztani?",
+  // --- plan schedule row (v1.4.6) ---
+  "Same routines on the same weekdays": "Ugyanazok a rutinok ugyanazokon a napokon",
+  "Next up stays next, any day": "A következő marad a következő, bármelyik napon",
+  // --- Home nutrition card (v1.4.6) ---
+  "Today’s nutrition": "Mai táplálkozás",
+  "Water today: {0}": "Víz ma: {0}",
+  "Add {0} of water": "{0} víz hozzáadása",
+  "Show today’s nutrition on Home, once you log food or water or set a goal.": "A mai táplálkozás a Kezdőlapon, amint ételt vagy vizet rögzítesz vagy célt állítasz be.",
 }

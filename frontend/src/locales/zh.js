@@ -2723,4 +2723,14 @@ export default {
   "{0} for this workout": "本次训练使用{0}",
   "Make default": "设为默认",
   "{0} is now your default layout": "{0}现在是你的默认布局",
+  // --- plan schedule picker (v1.4.6) ---
+  "How do you want to schedule?": "你想怎么安排？",
+  // --- plan schedule row (v1.4.6) ---
+  "Same routines on the same weekdays": "同样的日子做同样的计划",
+  "Next up stays next, any day": "下一个不变，哪天练都行",
+  // --- Home nutrition card (v1.4.6) ---
+  "Today’s nutrition": "今日营养",
+  "Water today: {0}": "今日饮水：{0}",
+  "Add {0} of water": "添加 {0} 饮水",
+  "Show today’s nutrition on Home, once you log food or water or set a goal.": "记录饮食或饮水，或设定目标后，在首页显示今日营养。",
 }

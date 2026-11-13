@@ -2734,4 +2734,14 @@ export default {
   "{0} for this workout": "{0} สำหรับการฝึกครั้งนี้",
   "Make default": "ตั้งเป็นค่าเริ่มต้น",
   "{0} is now your default layout": "ตอนนี้ {0} เป็นเลย์เอาต์เริ่มต้นของคุณ",
+  // --- plan schedule picker (v1.4.6) ---
+  "How do you want to schedule?": "อยากจัดตารางแบบไหน",
+  // --- plan schedule row (v1.4.6) ---
+  "Same routines on the same weekdays": "รูทีนเดิมในวันเดิมของสัปดาห์",
+  "Next up stays next, any day": "ลำดับถัดไปคงเดิม ไม่ว่าวันไหน",
+  // --- Home nutrition card (v1.4.6) ---
+  "Today’s nutrition": "โภชนาการวันนี้",
+  "Water today: {0}": "น้ำวันนี้: {0}",
+  "Add {0} of water": "เพิ่มน้ำ {0}",
+  "Show today’s nutrition on Home, once you log food or water or set a goal.": "แสดงโภชนาการวันนี้ในหน้าหลัก เมื่อคุณบันทึกอาหาร น้ำ หรือตั้งเป้าหมาย",
 }

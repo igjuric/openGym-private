@@ -2331,3 +2331,8 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
 /* The pages under Stats as one list (views/Stats.jsx StatsLinks): rows edge to edge in the card. */
 .card.stats-links{padding:4px 0;position:relative}
 .card.stats-links .lrow{background:none}
+
+/* Home's Today's nutrition card (v1.4.6) */
+.nutrition-card .nc-line{margin-top:6px}
+.nc-bar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden;margin-top:4px}
+.nc-bar i{display:block;height:100%;border-radius:3px}

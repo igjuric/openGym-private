@@ -1806,6 +1806,16 @@ export const PT_BR_OVERRIDES = {
   "{0} for this workout": "{0} para este treino",
   "Make default": "Usar sempre",
   "{0} is now your default layout": "{0} agora é seu layout padrão",
+  // --- plan schedule picker (v1.4.6) ---
+  "How do you want to schedule?": "Como você quer organizar o plano?",
+  // --- plan schedule row (v1.4.6) ---
+  "Same routines on the same weekdays": "As mesmas rotinas nos mesmos dias",
+  "Next up stays next, any day": "O próximo continua sendo o próximo, em qualquer dia",
+  // --- Home nutrition card (v1.4.6) ---
+  "Today’s nutrition": "Nutrição de hoje",
+  "Water today: {0}": "Água hoje: {0}",
+  "Add {0} of water": "Adicionar {0} de água",
+  "Show today’s nutrition on Home, once you log food or water or set a goal.": "Mostra a nutrição de hoje no Início assim que você registrar comida ou água ou definir uma meta.",
 }
 
 export default { ...pt, ...PT_BR_OVERRIDES }
