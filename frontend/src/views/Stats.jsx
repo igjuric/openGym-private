@@ -502,6 +502,8 @@ function StatsLinks({ S, workouts, nav }) {
       subtitle={(S.measurements || []).length
         ? t('Last check-in {0}', fmtDate(S.measurements[S.measurements.length - 1].d, true))
         : t('Waist, arms, body fat and anything else you measure, each with its own curve.')} />
+    <Row icon="flame" iconTint="var(--orange)" title={t('Nutrition')} accessory="chevron" onClick={() => nav('/nutrition')}
+      subtitle={t('Calories, protein, fat, carbs and water for each day.')} />
   </div>
 }
 

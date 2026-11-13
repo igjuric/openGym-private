@@ -72,4 +72,41 @@ public class HealthReadTest {
         assertEquals("android.permission.health.WRITE_EXERCISE", HealthRead.writePermission("exercise"));
         assertNull(HealthRead.readPermission("steps"));
     }
+
+    // v1.4.6: body composition, nutrition and water.
+    @Test
+    public void bodyPermissionNamesMatchTheManifest() {
+        assertEquals("android.permission.health.READ_BODY_FAT", HealthRead.readPermission("bodyFat"));
+        assertEquals("android.permission.health.READ_LEAN_BODY_MASS", HealthRead.readPermission("leanMass"));
+        assertEquals("android.permission.health.READ_BONE_MASS", HealthRead.readPermission("boneMass"));
+        assertEquals("android.permission.health.READ_BODY_WATER_MASS", HealthRead.readPermission("bodyWater"));
+        assertEquals("android.permission.health.READ_NUTRITION", HealthRead.readPermission("nutrition"));
+        assertEquals("android.permission.health.READ_HYDRATION", HealthRead.readPermission("hydration"));
+    }
+
+    @Test
+    public void bodyReadingsKeepTheirOriginAndDropNonsense() {
+        Metadata scale = new Metadata(Metadata.RECORDING_METHOD_AUTOMATICALLY_RECORDED, "rec-3", new DataOrigin("com.fitbit.FitbitMobile"),
+                Instant.ofEpochMilli(5), null, 0, null);
+        HealthRead.Body fat = HealthRead.body("bodyFat", 1_000, 18.4, scale);
+        assertEquals("bodyFat", fat.type);
+        assertEquals(18.4, fat.value, 1e-9);
+        assertEquals("com.fitbit.FitbitMobile", fat.origin);
+        assertEquals("rec-3", fat.id);
+        assertNull(HealthRead.body("bodyFat", 1_000, 120, scale));
+        assertNull(HealthRead.body("leanMass", 1_000, 0, scale));
+        assertEquals(62.5, HealthRead.body("leanMass", 1_000, 62.5, scale).value, 1e-9);
+    }
+
+    @Test
+    public void dayTotalsAreRoundedAndEmptyOnesStayNull() {
+        assertEquals(1850.3, HealthRead.total(1850.27), 1e-9);
+        assertNull(HealthRead.total(0.0));
+        assertNull(HealthRead.total(null));
+        assertNull(HealthRead.total(Double.POSITIVE_INFINITY));
+        HealthRead.Day d = new HealthRead.Day("2026-11-12");
+        assertEquals(true, d.empty());
+        d.water = 500.0;
+        assertEquals(false, d.empty());
+    }
 }

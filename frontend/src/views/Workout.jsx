@@ -1470,21 +1470,27 @@ function ActiveWorkout() {
   // List mode shows every unit at once, so the "current" exercise is chosen by tapping
   // "Set current" on its header instead of Prev/Next. The bottom Move/Swap/Remove actions
   // keep operating on it, and completing sets still advances it on its own.
-  // When the list was only opened for this session and cards are the saved default, "Set
-  // current" has no purpose besides picking which exercise to look at next, so it also goes
-  // back to card view (#260) rather than leaving you in the list to open Cards yourself. It
-  // stays in the list when the list is the saved default, which is a choice to keep, and when
-  // the exercise buttons are on, because then the tap also picks what Move/Swap/Remove below
-  // act on and the list is where you use them.
+  // It only moves the mark (v1.4.6). From #260 until then it also went back to cards when the
+  // list was opened for this session only, which undid a layout the athlete had just chosen,
+  // behind a button that said nothing about it. The ⋮ menu is the one place the layout changes,
+  // and it offers to keep the choice (setWorkoutView).
   const focusUnit = firstIdx => update(s => {
     if (!s.active) return
     s.active.cur = firstIdx
-    if (!workoutControls(s).exerciseButtons && (s.workoutView || 'cards') === 'cards') s.active.workoutView = 'cards'
   })
   // The header ⋮ re-lays-out the running session without touching the saved default
   // (Settings → During a workout → Workout view). It writes s.active.workoutView, which the
-  // render above prefers over S.workoutView.
-  const setWorkoutView = v => update(s => { if (s.active) s.active.workoutView = v })
+  // render above prefers over S.workoutView. A layout that differs from the saved one says so,
+  // with a way to make it the default in one tap (Focus is a session-only view, so not that one).
+  const setWorkoutView = v => {
+    update(s => { if (s.active) s.active.workoutView = v })
+    const saved = useStore.getState().S.workoutView || 'cards'
+    if (v === saved || !['cards', 'list', 'compact'].includes(v)) return
+    useUI.getState().toast(t('{0} for this workout', LAYOUT_LABEL[v]), {
+      action: t('Make default'),
+      onAction: () => { update(s => { s.workoutView = v }); useUI.getState().toast(t('{0} is now your default layout', LAYOUT_LABEL[v])) },
+    })
+  }
   const LAYOUT_LABEL = {
     cards: t('Cards'),
     list: t('List'),

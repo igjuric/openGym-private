@@ -192,7 +192,7 @@ plays; the zip export opens the share sheet.
 
 ### Health Connect (Android)
 
-Settings → **Health Connect** writes finished workouts and weigh-ins to Health Connect, Android's
+Settings → **Health & integrations** (Data & backup before v1.4.6) writes finished workouts and weigh-ins to Health Connect, Android's
 on-device store for health data, where other apps (Google Fit, Samsung Health, a smartwatch app…)
 can read them. It is off until the user turns it on, and nothing is asked of Health Connect before
 that.
@@ -272,6 +272,48 @@ default, each independent of writing and of the other:
   the server keeps them through every writer (`api/test/sync-hr.test.js`).
 - **Emulator check:** Google's Health Connect Toolbox can insert heart-rate and weight records on an
   API 34+ emulator; see the v1.4.3 notes for the run.
+
+#### Body composition, nutrition and water (v1.4.6, Android)
+
+Since v1.4.6 the switches live on their own page, Settings → **Health & integrations** (phone app
+only), with three more reads, each off by default and asking only for its own permissions. They
+read from any app that saves to Health Connect (Google Health for a Pixel Watch or Fitbit, a smart
+scale's app, a food diary), never from a named device or vendor.
+
+- **One metric, two ways in.** What comes back fills the same fields the user types into, never a
+  copy: body composition goes into the day's measurement check-in (`S.measurements`), food and
+  water into the day's entry in `S.nutrition` (`lib/nutrition.js`). Each value carries its source
+  per field (`src: { bodyFat: 'hc' }`); a field without one was typed in, and a typed value always
+  wins, on the phone and in a sync merge (`lib/sync-merge.js` `mergeDayEntries`, which also folds
+  imported fields from the other copy into a typed check-in). Editing an imported value by hand
+  makes it typed. A custom field that duplicates a built-in one ("Muscle mass" in kg) can be
+  merged into it from Choose measurements (`adoptCustomMeasurement`).
+- **Body composition from other apps.** `HC.readBody({ since })` → `{ records: [{ type, t, value,
+  id, origin, clientId }] }` for `BodyFatRecord` (percent), `LeanBodyMassRecord`, `BoneMassRecord`
+  and `BodyWaterMassRecord` (kg), only the types granted. Window and cursor as for weigh-ins (30
+  days, or a year with the history permission). `lib/health-read.js` `mergeBodyComposition` takes
+  the latest of each field and day into the built-in fields `bodyFat`, `leanMass`, `boneMass`,
+  `bodyWater` (kg, shown in kg or lb), skips openGym's own records and implausible readings, and
+  switches the field on in the logging form. Health Connect has no "skeletal muscle mass": a
+  scale's muscle mass usually arrives as lean mass.
+- **Calories and macros, water.** `HC.readNutrition({ from, to, nutrition, water })` →
+  `{ days: [{ d, kcal, protein, fat, carbs, water }], nutrition, water }`: Health Connect's own
+  `aggregateGroupByPeriod` per local day (`NutritionRecord` energy, protein, total fat, total
+  carbohydrate; `HydrationRecord` volume), so a meal two apps both saved counts once, by the
+  user's app priority in Health Connect. 30 days the first time, the last 7 after.
+  `mergeNutritionDays` keeps typed values, clears an imported total the hub no longer has, and
+  uses a per-day memo (`nSeen`) so a day the user cleared or deleted stays that way until food is
+  added to it in the hub.
+- **Permissions** (manifest): `READ_BODY_FAT`, `READ_LEAN_BODY_MASS`, `READ_BONE_MASS`,
+  `READ_BODY_WATER_MASS`, `READ_NUTRITION`, `READ_HYDRATION`. Still no background read.
+- **Device-local state** in `opengym-health.json`: `readBody`, `bHistory`, `bCursor`, `bSeen`,
+  `readNutrition`, `readWater`, `nSeen`, `nRead`, `readAt`.
+- **iPhone:** not yet; the switches are hidden there and `enableRead` answers `unsupported`.
+  `S.nutrition` and the new measurement fields sync to the iPhone and the web like any other data,
+  and both can be typed in on every platform.
+- **Device check:** in Google Health, allow it to write weight, body fat, nutrition and hydration
+  to Health Connect; in openGym turn on the three switches; log a meal and a glass of water, then
+  bring openGym to the front and look at Stats → Nutrition and Body measurements.
 
 ### Animation quality and the animation packs (store apps)
 

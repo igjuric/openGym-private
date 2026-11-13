@@ -16,6 +16,7 @@
 import { hrFromSamples, sanitizeHr } from './heart-rate.js'
 import { stampWorkout } from './sync-merge.js'
 import { isoOf } from './format.js'
+import { DEFAULT_MEASUREMENT_KEYS, HUB_MEASUREMENT_KEYS, emptyMeasurement } from './measurements.js'
 
 export const LB_PER_KG = 2.2046226218
 // Weigh-ins outside this are a typo or another person's profile in the hub, not a body weight.
@@ -107,4 +108,57 @@ export function mergeWeighIns(S, records, { src, seen = {} } = {}) {
   }
   if (days.length) S.bodyweight.sort((a, b) => (a.d < b.d ? -1 : 1))
   return days
+}
+
+// Readings outside these are a typo, a child's profile on a shared scale, or a scale that sent
+// grams: body fat in percent, the masses in kg.
+const BODY_BOUNDS = { bodyFat: [1, 75], leanMass: [10, 200], boneMass: [0.5, 15], bodyWater: [5, 150] }
+
+/**
+ * Body composition from the hub (`records`: [{ type, t, value, id, origin, clientId }], `type` one
+ * of HUB_MEASUREMENT_KEYS) put into the day's measurement check-in of `S` (mutated): body fat, lean
+ * mass, bone mass and body water are the same fields the user types into Measurements, never a
+ * second copy of them. Per field and day the latest reading of that day; `src` marks it imported.
+ * A field typed into openGym keeps its value. `seen` ({ 'bodyFat:2026-11-12': { id, t } }) is this
+ * phone's memo, updated in place: a reading already taken, or one the user then cleared, is not
+ * taken again; only a newer one is. A day deleted in openGym after the reading stays deleted. A
+ * field that gets a value is switched on in the logging form, so it can be corrected by hand.
+ * Returns the `field:day` keys changed.
+ */
+export function mergeBodyComposition(S, records, { src, seen = {}, now = Date.now() } = {}) {
+  const latest = new Map()
+  for (const r of Array.isArray(records) ? records : []) {
+    if (!r || isOwnRecord(r) || !HUB_MEASUREMENT_KEYS.includes(r.type)) continue
+    const t = Number(r.t), v = Number(r.value)
+    const [lo, hi] = BODY_BOUNDS[r.type]
+    if (!(t > 0) || !(v >= lo && v <= hi)) continue
+    const key = `${r.type}:${isoOf(new Date(t))}`
+    const cur = latest.get(key)
+    if (!cur || t > cur.t) latest.set(key, { t, v, id: r.id || null, type: r.type, d: key.slice(r.type.length + 1) })
+  }
+  if (!latest.size) return []
+  if (!Array.isArray(S.measurements)) S.measurements = []
+  const deleted = S.deleted?.measurements && typeof S.deleted.measurements === 'object' ? S.deleted.measurements : {}
+  const changed = []
+  for (const [key, r] of latest) {
+    if (seen[key] && !(r.t > Number(seen[key].t))) continue
+    let ex = S.measurements.find(e => e && e.d === r.d)
+    if (ex && ex[r.type] != null && !ex.src?.[r.type]) { seen[key] = { id: r.id, t: r.t }; continue }   // typed in: it wins
+    if (!ex && Number(deleted[r.d]) > r.t) continue                                                       // removed after it was taken
+    const value = r.type === 'bodyFat' ? Math.round(r.v * 10) / 10 : Math.round(r.v * 1000) / 1000
+    seen[key] = { id: r.id, t: r.t }
+    if (ex && ex[r.type] === value) continue
+    if (!ex) {
+      ex = emptyMeasurement(r.d, S.customMeasurements || [])
+      S.measurements.push(ex)
+    }
+    ex[r.type] = value
+    ex.src = { ...(ex.src && typeof ex.src === 'object' ? ex.src : {}), [r.type]: src }
+    ex.t = Math.max(Number(ex.t) || 0, now)
+    const on = Array.isArray(S.measurementEnabled) ? S.measurementEnabled : [...DEFAULT_MEASUREMENT_KEYS]
+    if (!on.includes(r.type)) S.measurementEnabled = [...on, r.type]
+    changed.push(key)
+  }
+  if (changed.length) S.measurements.sort((a, b) => (a.d < b.d ? -1 : 1))
+  return changed
 }

@@ -22,10 +22,20 @@ export const MEASUREMENT_FIELDS = [
   { key: 'ankleLeft', label: 'Left ankle', group: 'Legs', optional: true },
   { key: 'ankleRight', label: 'Right ankle', group: 'Legs', optional: true },
   { key: 'bodyFat', label: 'Body fat', group: 'Other', kind: 'percent', optional: true },
+  // Body composition from a smart scale (v1.4.6): kg, shown in the profile's kg or lb. Lean mass is
+  // what Health Connect and most scales call it; a scale's "muscle mass" lands here too.
+  { key: 'leanMass', label: 'Lean mass', group: 'Other', kind: 'mass', optional: true },
+  { key: 'boneMass', label: 'Bone mass', group: 'Other', kind: 'mass', optional: true },
+  { key: 'bodyWater', label: 'Body water', group: 'Other', kind: 'mass', optional: true },
 ]
 
 export const MEASUREMENT_KEYS = MEASUREMENT_FIELDS.map(f => f.key)
 export const DEFAULT_MEASUREMENT_KEYS = MEASUREMENT_FIELDS.filter(f => !f.optional).map(f => f.key)
+const BUILTIN = new Map(MEASUREMENT_FIELDS.map(f => [f.key, f]))
+// The canonical unit of a built-in field: percent, kg, or null for a length in cm.
+export const builtinUnit = key => BUILTIN.get(key)?.kind === 'percent' ? '%' : BUILTIN.get(key)?.kind === 'mass' ? 'kg' : null
+// The fields a phone's health hub can fill (lib/health-read.js mergeBodyComposition).
+export const HUB_MEASUREMENT_KEYS = ['bodyFat', 'leanMass', 'boneMass', 'bodyWater']
 
 const round = n => Math.round(n * 10) / 10
 const valid = (v, unit) => v != null && v !== '' && Number.isFinite(+v) &&
@@ -41,7 +51,12 @@ export const measurementUnitLabel = unit => unit === 'none' ? '' : unit
 // A unit where 0 is a reading, not an empty field: 0 % or a score of 0.
 export const zeroIsReading = unit => unit === '%' || unit === 'none'
 
-export const measurementUnit = (unit, field) => field?.key === 'bodyFat' ? '%' : unitOf(field) || (unit === 'lb' ? 'in' : 'cm')
+export const measurementUnit = (unit, field) => {
+  const own = builtinUnit(field?.key)
+  if (own === '%') return '%'
+  if (own === 'kg') return unit === 'lb' ? 'lb' : 'kg'
+  return unitOf(field) || (unit === 'lb' ? 'in' : 'cm')
+}
 export const toMeasurementDisplay = (value, unit, field) => {
   if (value == null) return null
   const display = measurementUnit(unit, field)
@@ -73,7 +88,9 @@ export function emptyMeasurement(date, custom = []) {
 export function normalizeMeasurementEntry(raw = {}, custom = []) {
   const entry = emptyMeasurement(raw.d || '', custom)
   entry.t = Number.isFinite(+raw.t) ? +raw.t : entry.t
-  for (const key of MEASUREMENT_KEYS) entry[key] = valid(raw[key], key === 'bodyFat' ? '%' : null)
+  for (const key of MEASUREMENT_KEYS) entry[key] = valid(raw[key], builtinUnit(key))
+  const src = sourcesOf(raw, entry)
+  if (src) entry.src = src
 
   const known = new Map(custom.map(c => [c.id, c]))
   const seen = new Set()
@@ -88,12 +105,35 @@ export function normalizeMeasurementEntry(raw = {}, custom = []) {
   return entry
 }
 
+// Where each value of a day came from: `src` maps a built-in field to the health hub that filled
+// it ('hc' Health Connect, 'ah' Apple Health). A field not named there was typed into openGym, and
+// a typed value always beats an imported one (lib/health-read.js, lib/sync-merge.js
+// mergeDayEntries). Only fields that still hold a value keep their mark.
+function sourcesOf(raw, entry) {
+  if (!raw?.src || typeof raw.src !== 'object' || Array.isArray(raw.src)) return null
+  const out = {}
+  for (const key of MEASUREMENT_KEYS) {
+    const s = raw.src[key]
+    if (entry[key] != null && (s === 'hc' || s === 'ah')) out[key] = s
+  }
+  return Object.keys(out).length ? out : null
+}
+
+/** Whether `key` of `entry` came from the phone's health hub rather than being typed in. */
+export const isImportedValue = (entry, key) => !!(entry?.src && entry.src[key] && entry[key] != null)
+
 // Fold a second entry for a date into the first. The later reading wins per field, but a field
 // it left empty keeps the earlier value — two partial rows on one date are two halves of the
 // same check-in, not a reason to throw one away.
 function mergeMeasurementEntries(a, b) {
   const entry = { ...a, t: b.t }
-  for (const key of MEASUREMENT_KEYS) entry[key] = b[key] ?? a[key]
+  const src = {}
+  for (const key of MEASUREMENT_KEYS) {
+    entry[key] = b[key] ?? a[key]
+    const from = b[key] != null ? b : a
+    if (entry[key] != null && from.src?.[key]) src[key] = from.src[key]
+  }
+  if (Object.keys(src).length) entry.src = src; else delete entry.src
   const other = new Map(a.other.map(o => [o.id, o]))
   for (const o of b.other) {
     const prev = other.get(o.id)
@@ -134,9 +174,49 @@ export function normalizeMeasurementsState(state) {
   return state
 }
 
+// A custom field made for what a built-in field now holds (v1.4.6): "Muscle mass" in kg from
+// before Lean mass existed, "Body water" in kg, a "Body fat %" before the built-in one. Matched by
+// name (a few languages) and by kind, so a "Water intake" in ml-less units is never offered.
+// Moving it over is the user's call (adoptCustomMeasurement), never done on its own.
+const SAME_AS = [
+  ['leanMass', 'mass', /\b(lean|muscle|muskel|musculaire|muscular|muscolare|magra|mager)/i],
+  ['boneMass', 'mass', /\b(bone|knochen|osseuse|ósea|ossea|óssea)/i],
+  ['bodyWater', 'mass', /\b(body water|wasser|eau corporelle|agua corporal|acqua corporea|água corporal)/i],
+  ['bodyFat', 'percent', /\b(body ?fat|fat ?%|körperfett|graisse|grasa|grasso|gordura)/i],
+]
+/** The built-in field a custom one duplicates, or null. */
+export function builtinFor(custom) {
+  const kind = unitKind(unitOf(custom))
+  for (const [key, want, re] of SAME_AS) if (kind === want && re.test(String(custom?.name || ''))) return key
+  return null
+}
+
+/**
+ * Moves every reading of custom field `id` into built-in `key` and removes the custom field, so
+ * one metric is left instead of two. A day that already has a built-in value keeps it. The
+ * built-in field is switched on. Mutates `state`; returns the number of readings moved.
+ */
+export function adoptCustomMeasurement(state, id, key, now = Date.now()) {
+  if (!BUILTIN.has(key)) return 0
+  let moved = 0
+  for (const e of Array.isArray(state.measurements) ? state.measurements : []) {
+    const rows = Array.isArray(e.other) ? e.other : []
+    const row = rows.find(o => o?.id === id)
+    if (!row) continue
+    const v = valid(row.value, builtinUnit(key))
+    if (v != null && e[key] == null) { e[key] = v; moved++ }
+    e.other = rows.filter(o => o?.id !== id)
+    e.t = Math.max(Number(e.t) || 0, now)
+  }
+  state.customMeasurements = (state.customMeasurements || []).filter(c => c?.id !== id)
+  const on = Array.isArray(state.measurementEnabled) ? state.measurementEnabled : [...DEFAULT_MEASUREMENT_KEYS]
+  if (!on.includes(key)) state.measurementEnabled = [...on, key]
+  return moved
+}
+
 export function measurementValue(entry, key) {
   if (!entry) return null
-  if (!key.startsWith('other:')) return valid(entry[key], key === 'bodyFat' ? '%' : null)
+  if (!key.startsWith('other:')) return valid(entry[key], builtinUnit(key))
   const row = (entry.other || []).find(o => o.id === key.slice(6))
   return valid(row?.value, unitOf(row))
 }
@@ -179,7 +259,7 @@ export function latestMeasurement(state, key) {
 }
 
 export function measurementEntryHasValues(entry) {
-  return MEASUREMENT_KEYS.some(k => valid(entry?.[k], k === 'bodyFat' ? '%' : null) != null) ||
+  return MEASUREMENT_KEYS.some(k => valid(entry?.[k], builtinUnit(k)) != null) ||
     (entry?.other || []).some(o => valid(o?.value, unitOf(o)) != null)
 }
 
@@ -187,7 +267,8 @@ export function measurementEntryHasValues(entry) {
 // A built-in field is a fixed snake_case column in cm (body fat in percent). A custom field's
 // column is its name with its unit in brackets, "Muscle ratio (%)", its values in that unit; a
 // legacy field without a unit stores cm, so its column says cm. A unitless field is its bare name.
-export const builtinCsvColumn = f => f.kind === 'percent' ? 'body_fat_percent' : f.key.replace(/[A-Z]/g, c => '_' + c.toLowerCase()) + '_cm'
+export const builtinCsvColumn = f => f.kind === 'percent' ? 'body_fat_percent'
+  : f.key.replace(/[A-Z]/g, c => '_' + c.toLowerCase()) + (f.kind === 'mass' ? '_kg' : '_cm')
 export const customCsvColumn = (name, unit) => unit === 'none' ? name : `${name} (${unitOf({ unit }) || 'cm'})`
 export function parseCustomCsvColumn(header) {
   const h = String(header ?? '').trim()

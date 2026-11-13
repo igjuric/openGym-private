@@ -146,12 +146,20 @@
          rate during a workout and weigh-ins from other apps (#544). Foreground only: no
          background read permission. The history one (v1.4.4, idea from #801) is asked for
          together with reading weigh-ins, where Health Connect has it, so the first read can go
-         further back than the 30 days before the grant; the read works without it too. -->
+         further back than the 30 days before the grant; the read works without it too.
+         v1.4.6 reads body composition (body fat, lean, bone and water mass), and the day's
+         nutrition (energy and macros) and water, each group behind its own switch. -->
     <uses-permission android:name="android.permission.health.WRITE_EXERCISE" />
     <uses-permission android:name="android.permission.health.WRITE_WEIGHT" />
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
     <uses-permission android:name="android.permission.health.READ_WEIGHT" />
     <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_HISTORY" />
+    <uses-permission android:name="android.permission.health.READ_BODY_FAT" />
+    <uses-permission android:name="android.permission.health.READ_LEAN_BODY_MASS" />
+    <uses-permission android:name="android.permission.health.READ_BONE_MASS" />
+    <uses-permission android:name="android.permission.health.READ_BODY_WATER_MASS" />
+    <uses-permission android:name="android.permission.health.READ_NUTRITION" />
+    <uses-permission android:name="android.permission.health.READ_HYDRATION" />
 
     <!-- Gym reminder (#614), off until switched on in Settings: where the phone is, for "I'm at
          the gym right now" and to watch the gyms the user added with the platform's proximity

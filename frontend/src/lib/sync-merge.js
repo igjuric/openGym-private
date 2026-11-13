@@ -28,7 +28,10 @@
  *   - routines: union by id in the newer copy's order, a routine only the older copy has next to
  *     its neighbour there (unionByNeighbours); of an id that both have, the version
  *     edited last by its own `_ts` (stampRoutines), the newer copy's on a tie
- *   - bodyweight, measurements: union by day, the later-edited (`t`) entry of a day that both have
+ *   - bodyweight, measurements, nutrition: union by day, the later-edited (`t`) entry of a day that
+ *     both have; one typed into openGym beats one read from the phone's health hub (`src`). For a
+ *     measurement check-in or a nutrition day, `src` is per field, and the kept entry also takes
+ *     the imported fields only the other copy has (mergeDayEntries)
  *   - favEx: ordered set union, the newer copy first
  *   - exWeights: union by exercise, the better `w` for that exercise — larger for an ordinary
  *     lift, smaller on an assistance machine (a PR logged on the other device must not be
@@ -172,6 +175,53 @@ export function mergeBodyweight(a = [], b = []) {
     // A weigh-in typed into openGym beats one read from the phone's health hub (`src`, lib/health-read.js)
     // whichever is newer: the scale's reading is the fallback, never a correction of the user's own.
     if (!cur || (!!cur.src !== !!e.src ? !e.src : (e.t || 0) > (cur.t || 0))) byDay.set(e.d, e)
+  }
+  return [...byDay.values()].sort((x, y) => (x.d < y.d ? -1 : 1))
+}
+
+// A day entry whose values each say where they came from (lib/measurements.js, lib/nutrition.js):
+// `src` maps a field to the health hub that filled it; a field it does not name was typed in.
+const DAY_META = new Set(['d', 't', 'src', 'other'])
+const dayValue = v => v != null && v !== '' && typeof v !== 'object'
+/** Whether a day entry holds anything typed into openGym (not only what the hub filled in). */
+export function typedInDay(e) {
+  if (!e || typeof e !== 'object') return false
+  const src = isMap(e.src) ? e.src : {}
+  if (Object.keys(e).some(k => !DAY_META.has(k) && dayValue(e[k]) && !src[k])) return true
+  return list(e.other).some(o => o && o.value != null)
+}
+// `win` with the imported fields only `lose` has. A copy, `win` itself when there are none.
+function foldImported(win, lose) {
+  const src = isMap(lose?.src) ? lose.src : null
+  if (!src) return win
+  let out = win
+  for (const [k, s] of Object.entries(src)) {
+    if (!dayValue(lose[k]) || dayValue(win[k])) continue
+    if (out === win) out = { ...clone(win), src: { ...(isMap(win.src) ? win.src : {}) } }
+    out[k] = lose[k]
+    out.src[k] = s
+  }
+  return out
+}
+
+/**
+ * Measurement check-ins and nutrition days: one entry per day, as mergeBodyweight, with `src`
+ * per field. Of a day both copies have, the one with something typed in beats one the hub filled
+ * alone, else the one edited later (`t`); the kept entry then also takes every imported field the
+ * other copy has and it lacks. So a waist typed on one device and the scale's body fat imported
+ * on the other end up in one check-in. The price: an imported value cleared by hand on one device
+ * while the other still holds it comes back once, one tap to clear again; a value never comes
+ * back over one typed in.
+ */
+export function mergeDayEntries(a = [], b = []) {
+  const byDay = new Map()
+  for (const e of [...list(a), ...list(b)]) {
+    if (!e || e.d == null) continue
+    const cur = byDay.get(e.d)
+    if (!cur) { byDay.set(e.d, e); continue }
+    const ct = typedInDay(cur), et = typedInDay(e)
+    const win = ct !== et ? (et ? e : cur) : ((e.t || 0) > (cur.t || 0) ? e : cur)
+    byDay.set(e.d, foldImported(win, win === e ? cur : e))
   }
   return [...byDay.values()].sort((x, y) => (x.d < y.d ? -1 : 1))
 }
@@ -479,7 +529,7 @@ const workoutTime = w => Number(w?._ts) || Number(w?.end) || Number(w?.start) ||
 const bodyweightKey = e => `${e?.d}|${e?.t ?? ''}`
 const RESET_LISTS = {
   workouts: workoutKey, routines: x => x?.id, customEx: x => x?.id, bodyweight: bodyweightKey,
-  measurements: bodyweightKey, gymCards: x => x?.id, equipProfiles: x => x?.id, favEx: x => x,
+  measurements: bodyweightKey, nutrition: bodyweightKey, gymCards: x => x?.id, equipProfiles: x => x?.id, favEx: x => x,
 }
 const RESET_MAPS = ['exNotes', 'barWeights', 'exAliases', ...STAMPED_MAPS]
 /** An entry's name in resetIds: a workout's id (or day and start), a weigh-in's day and time, … */
@@ -535,6 +585,7 @@ export function sinceReset(S, at, ids) {
     out.customEx = list(S.customEx).filter(c => c && after(c._ts))
     out.bodyweight = list(S.bodyweight).filter(e => e && after(e.t))
     out.measurements = list(S.measurements).filter(e => e && after(e.t))
+    if (Array.isArray(S.nutrition)) out.nutrition = S.nutrition.filter(e => e && after(e.t))
     // No time of their own: taken for what they were before the reset, which cleared them.
     out.equipProfiles = []
     out.gymCards = []
@@ -584,14 +635,14 @@ export function sinceReset(S, at, ids) {
 // removal (the entry's own `_ts`, a weigh-in's `t`) keeps it, as does an add-back stamped later.
 const DEL_LISTS = {
   workouts: workoutKey, routines: x => x?.id, customEx: x => x?.id, bodyweight: e => e?.d,
-  measurements: e => e?.d, gymCards: x => x?.id, equipProfiles: x => x?.id, favEx: x => x,
+  measurements: e => e?.d, nutrition: e => e?.d, gymCards: x => x?.id, equipProfiles: x => x?.id, favEx: x => x,
 }
 // When an entry was last edited, to hold against a removal. Entries with no time of their own
 // (favourites, and cards and profiles saved before they were stamped) count as older than any
 // removal.
 const DEL_TIME = {
   workouts: workoutTime, routines: x => Number(x?._ts) || 0, customEx: x => Number(x?._ts) || 0,
-  bodyweight: e => Number(e?.t) || 0, measurements: e => Number(e?.t) || 0,
+  bodyweight: e => Number(e?.t) || 0, measurements: e => Number(e?.t) || 0, nutrition: e => Number(e?.t) || 0,
   gymCards: x => Number(x?._ts) || 0, equipProfiles: x => Number(x?._ts) || 0,
 }
 // Per field, the most stamps kept; past it the oldest go first.
@@ -698,7 +749,7 @@ function applyDeletions(S, deleted) {
 // merge of their own are not stamped here; a field nobody stamped follows the newer copy, as before.
 const OWN_MERGE = new Set([
   '_ts', '_rev', '_wid', '_wids', '_unstamped', '_prior', 'active', 'unit', 'unitSet', 'resetAt', 'resetIds', 'deleted', 'edited', 'undone', 'routineOrder',
-  'workouts', 'routines', 'customEx', 'equipProfiles', 'gymCards', 'bodyweight', 'measurements', 'favEx',
+  'workouts', 'routines', 'customEx', 'equipProfiles', 'gymCards', 'bodyweight', 'measurements', 'nutrition', 'favEx',
   'exWeights', 'balanceOverrides', 'loadKind', 'plates', 'dbLoad', 'dumbbells', 'stackWeights', 'dayNotes', 'dayPhotos',
 ])
 // Stamped per key instead of whole: one day of the plan, one exercise's note or bar.
@@ -905,8 +956,10 @@ export function mergeStates(a0, b0, { prefer } = {}) {
     }
   }
   out.bodyweight = mergeBodyweight(n.bodyweight, o.bodyweight).map(clone)
-  // A day's body measurements are one check-in, kept and merged the way a weigh-in is.
-  if (list(n.measurements).length || list(o.measurements).length) out.measurements = mergeBodyweight(n.measurements, o.measurements).map(clone)
+  // A day's body measurements are one check-in, kept and merged the way a weigh-in is, with the
+  // health hub's fields folded in per field (mergeDayEntries); a day's nutrition the same way.
+  if (list(n.measurements).length || list(o.measurements).length) out.measurements = mergeDayEntries(n.measurements, o.measurements).map(clone)
+  if (list(n.nutrition).length || list(o.nutrition).length) out.nutrition = mergeDayEntries(n.nutrition, o.nutrition).map(clone)
   if (list(n.favEx).length || list(o.favEx).length) out.favEx = [...new Set([...list(n.favEx), ...list(o.favEx)])]
   // What either device removed stays removed (the `deleted` section above). A workout taken out
   // this way leaves its exercises' kept loads to be read again, as an edit of it would: from the
@@ -1102,7 +1155,7 @@ export function highestStamp(S) {
     }
   }
   for (const f of STAMPED_MAPS) if (isMap(S[f])) for (const v of Object.values(S[f])) see(stampOf(v))
-  for (const e of [...list(S.bodyweight), ...list(S.measurements)]) if (e && typeof e === 'object') see(e.t)
+  for (const e of [...list(S.bodyweight), ...list(S.measurements), ...list(S.nutrition)]) if (e && typeof e === 'object') see(e.t)
   return m
 }
 
@@ -1131,7 +1184,7 @@ export function stampChange(prev, next, wall = Date.now()) {
   // A weigh-in the change logged or corrected (its `t` moved): the newer entry of a day wins the
   // merge (mergeBodyweight), so it takes the change's time like any other stamp. One whose weight
   // only a unit switch converted keeps its own.
-  for (const f of ['bodyweight', 'measurements']) {
+  for (const f of ['bodyweight', 'measurements', 'nutrition']) {
     const before = new Map(list(prev?.[f]).filter(e => e && e.d != null).map(e => [e.d, e]))
     for (const e of list(next[f])) {
       if (!e || typeof e !== 'object' || e.d == null || e.t == null) continue
@@ -1217,8 +1270,10 @@ export function localExtras(local, server) {
   const keysNew = f => Object.entries(isMap(local?.[f]) ? local[f] : {})
     .filter(([k, v]) => v != null && !(Array.isArray(v) && !v.length) && !(isMap(server?.[f]) && k in server[f])).length
   const measured = new Set(list(server?.measurements).map(e => e?.d))
+  const ate = new Set(list(server?.nutrition).map(e => e?.d))
   const setup = ['gymCards', 'equipProfiles'].reduce((n, f) => n + list(local?.[f]).filter(x => x && x.id != null && !ids(f).has(x.id)).length, 0) +
     list(local?.measurements).filter(e => e && e.d != null && !measured.has(e.d)).length +
+    list(local?.nutrition).filter(e => e && e.d != null && !ate.has(e.d)).length +
     Object.entries(isMap(local?.dayNotes) ? local.dayNotes : {}).filter(([k, v]) => readNote(v) && !readNote(server?.dayNotes?.[k])).length +
     keysNew('week') + keysNew('dayPlan') + keysNew('exNotes') + keysNew('exAliases')
   return {

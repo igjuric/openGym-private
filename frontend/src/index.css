@@ -1963,6 +1963,17 @@ body.no-tabbar.resting #toast{bottom:calc(100px + var(--sab))}
 .wd-ex>.grow{flex:1;min-width:0}
 .wd-ex:active{background:var(--surface-2)}
 .wd-ss{box-shadow:inset 3px 0 0 var(--acc);padding-inline-start:11px;margin-bottom:12px}
+/* Workout sheet (v1.4.6): date and length as chips that open their sheets, the two main actions
+   side by side, the rest in a short list, delete as a quiet line at the end. */
+.wd-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:2px 0 14px}
+.wd-chip{display:inline-flex;align-items:center;gap:5px;padding:5px 11px;border-radius:999px;background:var(--surface-2);color:var(--label);font-size:14px;line-height:1.2}
+.wd-chip .icn{font-size:14px;color:var(--acc)}
+.wd-chip:active{background:var(--surface-3,var(--surface-2));opacity:.85}
+.wd-main{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;margin-bottom:10px}
+.wd-main .btn{padding-inline:8px}
+.wd-main .btn.plain{background:var(--surface-2);font-weight:600}
+.wd-more{margin-bottom:6px}
+.btn.wd-delete{color:var(--red);font-size:15px}
 .wd-ss .ss-label{margin:0 0 8px}
 .wd-ss .wd-ex:last-child{margin-bottom:0}
 .ss-card{
